@@ -1,0 +1,79 @@
+GESTIÓN DE HORARIOS DE TRABAJO — paquete de app (PWA)
+======================================================
+
+Sobre el .apk
+-------------
+No he podido generar un archivo .apk real: compilar un APK de Android requiere
+las herramientas oficiales del SDK de Android (aapt2, un compilador de recursos,
+firma del paquete, etc.), que no están disponibles en este entorno, y descargarlas
+tampoco es posible porque el acceso a internet aquí está limitado a una lista
+concreta de dominios que no incluye los servidores de Android/Google.
+
+Lo que sí te entrego, y que en el día a día funciona igual que una app instalada
+en el móvil:
+- Un icono propio (calendario azul con un reloj en la esquina, en varios tamaños).
+- manifest.json con el nombre "Gestión de Horarios de Trabajo".
+- Un service worker para que funcione sin conexión.
+- El HTML enlazado a todo esto.
+
+Con estos 3 archivos + la carpeta de iconos, Chrome en Android puede "instalar"
+la web como una app: icono en el escritorio, pantalla completa sin barra del
+navegador, y funciona offline. Le falta el ".apk" como archivo, pero no la
+experiencia de uso.
+
+PASO 1 — Subir estos archivos a algún sitio con https
+-------------------------------------------------------
+Un manifest y un service worker solo funcionan servidos por http(s), no abriendo
+el HTML directamente desde el móvil (file://). La forma más simple y gratuita,
+ya que usas GitHub:
+1. Crea un repositorio nuevo en GitHub (o usa uno existente).
+2. Sube toda esta carpeta (index.html, manifest.json, service-worker.js, icons/).
+3. Actívalo como GitHub Pages (Settings → Pages → Deploy from branch → main).
+4. En un par de minutos tendrás una URL tipo:
+   https://tu-usuario.github.io/tu-repositorio/
+
+PASO 2A — Instalarla como app (sin .apk)
+-----------------------------------------
+Desde el móvil, abre esa URL con Chrome y toca el menú (⋮) → "Instalar app" o
+"Añadir a pantalla de inicio". Quedará con el icono y el nombre "Gestión de
+Horarios de Trabajo", en pantalla completa.
+
+PASO 2B — Generar un .apk/.aab real (opcional, sin programar)
+-----------------------------------------------------------------
+Si de verdad quieres un archivo .apk instalable (por ejemplo para repartirlo
+sin depender de una URL):
+1. Ve a https://www.pwabuilder.com
+2. Pega la URL de GitHub Pages del paso 1.
+3. Pulsa "Package for stores" → Android → descarga el paquete.
+   Te genera un .apk/.aab ya firmado, listo para instalar o subir a Google Play,
+   usando automáticamente el nombre e icono de tu manifest.json.
+
+Cualquier duda sobre este proceso, dímelo y seguimos desde aquí.
+
+
+══════════════════════════════════════════════════════════════
+VERSIÓN 2 — Novedades para Android
+══════════════════════════════════════════════════════════════
+- La app gira a horizontal (antes estaba bloqueada en vertical).
+- Vista de un mes (por defecto en el móvil) con flechas, deslizar el dedo
+  y botón "Hoy"; las horas de cada día se ven en la celda. Vista anual
+  con un botón.
+- Seleccionar varios días (☑): tocar días sueltos, "Laborables del mes" o
+  "Rango", y aplicar las mismas horas a todos (o quitarlas).
+- Copia de seguridad: exportar / importar archivo + almacenamiento persistente.
+- Bloqueo con PIN (y huella opcional), en "Datos y seguridad".
+- Modo oscuro (automático o manual), diálogos desde abajo, botones grandes.
+- El botón "Atrás" cierra diálogos y la selección antes de salir de la app.
+- Atajos al mantener pulsado el icono: "Registrar hoy" e "Informe del mes".
+
+PARA PUBLICAR ESTA VERSIÓN
+--------------------------
+1. Sube TODOS los archivos de esta carpeta al repositorio (index.html,
+   manifest.json, service-worker.js e icons/), sustituyendo los anteriores.
+2. Los cambios de index.html llegan solos a quien ya tiene la app instalada
+   (el service worker busca primero en la red).
+3. PERO la orientación libre y los atajos están en el manifest, y Android los
+   copia al generar el paquete: hay que volver a generar el .aab en
+   PWABuilder (https://www.pwabuilder.com), subiendo la MISMA clave de firma
+   (keystore) que usaste la primera vez, con un número de versión mayor
+   (versionCode +1), y subirlo a Play Console como nueva versión.

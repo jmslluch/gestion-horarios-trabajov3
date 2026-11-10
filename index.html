@@ -1,0 +1,2396 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Gestión de Horarios de Trabajo</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a4a7a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Horarios Trabajo">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<script>
+(function(){
+  try {
+    var pref = localStorage.getItem('tema_app') || 'auto';
+    var dark = pref === 'oscuro' || (pref === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    var b = JSON.parse(localStorage.getItem('bloqueo_app') || 'null');
+    if (b && b.hash) document.documentElement.classList.add('locked');
+  } catch (e) {}
+})();
+</script>
+<style>
+  :root {
+    color-scheme: light;
+    --header-bg:#1a4a7a; --header-text:#fff; --accent:#1a4a7a;
+    --festivo-bg:#ffcccc; --festivo-fg:#990000; --local-bg:#ffe0b3; --local-fg:#8a5300;
+    --vacaciones-bg:#cfe8d4; --vacaciones-fg:#1a6a3a; --weekend-bg:#e0e0e0; --weekend-fg:#555;
+    --gold:#e8a020; --worked-dot:#1a4a7a;
+    --bg:#f0f2f5; --surface:#fff; --text:#222; --muted:#666; --border:#ddd; --border-strong:#aaa;
+    --btn-bg:#f0f0f0; --btn-hover:#ddd; --input-bg:#fff;
+    --hint-bg:#fffbe6; --hint-border:#f0c040; --hint-text:#664400;
+    --th-bg:#2c5f8a; --cell-border:#e8e8e8; --cell-empty:#f8f8f8; --cell-hover:#e4ecff;
+    --status-bg:#e8eef6; --status-border:#c8d4e8;
+    --table-head-bg:#eef3fa; --table-foot-bg:#f7f9fc; --table-border:#e0e0e0;
+    --ok:#1a6a3a; --err:#cc2222; --sel-bg:#cfe0ff; --sel:#1a73e8;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --header-bg:#17395c; --accent:#8fbbee;
+    --festivo-bg:#5c2b2b; --festivo-fg:#ffb3b3; --local-bg:#5c4524; --local-fg:#ffd08a;
+    --vacaciones-bg:#27472f; --vacaciones-fg:#a6dcb2; --weekend-bg:#2f343a; --weekend-fg:#aab2bb;
+    --worked-dot:#8fbbee;
+    --bg:#14181d; --surface:#1e242b; --text:#e6e9ed; --muted:#9aa4af; --border:#33404d; --border-strong:#566574;
+    --btn-bg:#2a323b; --btn-hover:#36414c; --input-bg:#161b21;
+    --hint-bg:#3a3320; --hint-border:#7a6528; --hint-text:#f0d890;
+    --th-bg:#244a73; --cell-border:#2c353e; --cell-empty:#191e24; --cell-hover:#2b3b52;
+    --status-bg:#1a2129; --status-border:#33404d;
+    --table-head-bg:#243040; --table-foot-bg:#222c37; --table-border:#33404d;
+    --ok:#6fd08a; --err:#ff8a8a; --sel-bg:#1d4a80; --sel:#6aa8ff;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:Arial,sans-serif; font-size:13px; background:var(--bg); color:var(--text);
+         padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); }
+  select, input { color:var(--text); background:var(--input-bg); max-width:100%; }
+  html, body { overflow-x:hidden; }
+  select, input[type=text], input[type=password], input[type=date] { border:1px solid var(--border-strong); border-radius:4px; }
+  .muted { font-weight:normal; color:var(--muted); }
+
+  header { background:var(--header-bg); color:var(--header-text); padding:12px 20px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  header h1 { font-size:17px; font-weight:bold; flex:1; }
+  header .badge { background:var(--surface); color:var(--accent); border-radius:4px; padding:3px 10px; font-size:11px; font-weight:bold; }
+
+  .year-nav { background:var(--surface); border-bottom:2px solid var(--status-border); padding:10px 16px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .year-nav .nav-label { font-size:12px; color:var(--muted); font-weight:bold; }
+  .year-nav button.yn { padding:6px 14px; border:1px solid var(--border-strong); border-radius:20px; cursor:pointer; font-size:12px; background:var(--btn-bg); color:var(--text); transition:all 0.15s; }
+  .year-nav button.yn:hover { background:var(--btn-hover); border-color:var(--header-bg); }
+  .year-nav button.yn.active { background:var(--header-bg); color:#fff; border-color:var(--header-bg); font-weight:bold; }
+  .year-nav button.yn-arrow { padding:6px 12px; border:1px solid var(--border-strong); border-radius:4px; cursor:pointer; font-size:14px; background:var(--btn-bg); color:var(--text); }
+  .year-nav button.yn-arrow:hover { background:var(--btn-hover); }
+  .year-nav .year-display { font-size:15px; font-weight:bold; color:var(--accent); min-width:70px; text-align:center; }
+  .year-nav .info-badge { margin-left:auto; background:var(--hint-bg); border:1px solid var(--hint-border); border-radius:4px; padding:4px 10px; font-size:11px; color:var(--hint-text); }
+
+  .toolbar { background:var(--surface); border-bottom:1px solid var(--border); padding:8px 16px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .toolbar button { padding:6px 13px; border:1px solid var(--border-strong); border-radius:4px; cursor:pointer; font-size:12px; background:var(--btn-bg); color:var(--text); }
+  .toolbar button:hover { background:var(--btn-hover); }
+  .toolbar button.primary, button.primary { background:var(--header-bg); color:#fff; border:1px solid var(--header-bg); border-radius:4px; cursor:pointer; padding:6px 13px; font-size:12px; }
+  .toolbar button.primary:hover { background:#1060a0; }
+  .toolbar button.danger, button.danger { background:#cc2222; color:#fff; border-color:#cc2222; }
+  .toolbar button.danger:hover { background:#aa0000; }
+  .toolbar .sep { width:1px; height:26px; background:var(--border-strong); opacity:.5; }
+  .toolbar button.cat-btn { display:inline-flex; align-items:center; gap:6px; background:var(--surface); }
+  .toolbar button.cat-btn.active { box-shadow:0 0 0 2px rgba(128,128,128,.55) inset; font-weight:bold; }
+  .toolbar button.cat-btn .cat-sw { width:13px; height:13px; border-radius:3px; border:1px solid rgba(128,128,128,.6); display:inline-block; }
+  .toolbar .mode-label { font-size:11px; color:var(--muted); font-weight:bold; }
+  .month-nav { display:inline-flex; align-items:center; gap:6px; }
+  .month-nav #monthDisplay { font-weight:bold; color:var(--accent); min-width:130px; text-align:center; font-size:14px; }
+
+  .hint { background:var(--hint-bg); border:1px solid var(--hint-border); border-radius:4px; padding:5px 12px; font-size:11px; color:var(--hint-text); margin:8px 16px; }
+  .aviso { background:var(--hint-bg); border:1px solid var(--hint-border); border-radius:4px; padding:6px 9px; font-size:11px; color:var(--hint-text); margin-bottom:10px; }
+
+  .calendar-grid { display:flex; flex-wrap:wrap; gap:18px; padding:14px 16px; }
+  .calendar-grid.single { justify-content:center; touch-action:pan-y; }
+  .month-card { background:var(--surface); border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,.18); overflow:hidden; flex:1 1 280px; max-width:360px; min-width:0; }
+  .calendar-grid.single .month-card { flex-basis:100%; max-width:560px; }
+  .month-header { background:var(--header-bg); color:#fff; text-align:center; padding:7px 4px; font-size:12px; font-weight:bold; letter-spacing:.5px; }
+  .month-table { border-collapse:collapse; width:100%; table-layout:fixed; }
+  .month-table th { background:var(--th-bg); color:#fff; text-align:center; font-size:11px; padding:4px 2px; }
+  .month-table td { position:relative; text-align:center; padding:0; height:34px; cursor:pointer; border:1px solid var(--cell-border); transition:background .1s; user-select:none; -webkit-tap-highlight-color:transparent; }
+  .month-table td .day-num { display:block; line-height:34px; font-size:clamp(11px,3vw,13px); }
+  .month-table td.weekend { background:var(--weekend-bg); color:var(--weekend-fg); cursor:pointer; }
+  .month-table td.festivo { background:var(--festivo-bg) !important; color:var(--festivo-fg); font-weight:bold; }
+  .month-table td.local { background:var(--local-bg) !important; color:var(--local-fg); font-weight:bold; }
+  .month-table td.vacaciones { background:var(--vacaciones-bg) !important; color:var(--vacaciones-fg); font-weight:bold; }
+  .month-table td.empty { background:var(--cell-empty); cursor:default; }
+  .month-table td:not(.empty):not(.weekend):hover { background:var(--cell-hover); }
+  .month-table td.worked::after { content:''; position:absolute; bottom:2px; right:3px; width:6px; height:6px; border-radius:50%; background:var(--worked-dot); }
+  .month-table td.today { outline:2px solid var(--gold); outline-offset:-2px; }
+  .month-table td.selected { background:var(--sel-bg) !important; outline:3px solid var(--sel); outline-offset:-3px; }
+  .month-table td.selected.rango-inicio { outline-style:dashed; }
+  /* Vista de un solo mes: celdas más grandes, con las horas del día visibles */
+  .month-card.detailed .month-table td { height:58px; }
+  .month-card.detailed .month-table td .day-num { line-height:38px; font-size:15px; }
+  .month-card.detailed .month-table td.worked::after { display:none; }
+  .month-card.detailed .month-table th { font-size:12px; padding:6px 2px; }
+  .day-hrs { position:absolute; left:0; right:0; bottom:4px; font-size:10px; line-height:1; font-weight:bold; color:var(--accent); }
+  .month-table td.festivo .day-hrs, .month-table td.local .day-hrs, .month-table td.vacaciones .day-hrs { color:inherit; }
+
+  /* Barra de selección de varios días */
+  .sel-bar { position:sticky; bottom:0; z-index:60; background:var(--surface); border-top:2px solid var(--sel); box-shadow:0 -3px 12px rgba(0,0,0,.25); padding:10px 16px calc(10px + env(safe-area-inset-bottom)); }
+  .sel-bar .sel-info { font-size:13px; margin-bottom:8px; }
+  .sel-bar .sel-info b { color:var(--sel); font-size:15px; }
+  .sel-bar .sel-row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:6px; }
+  .sel-bar button { padding:7px 13px; border:1px solid var(--border-strong); border-radius:4px; cursor:pointer; font-size:12px; background:var(--btn-bg); color:var(--text); }
+  .sel-bar button.primary { background:var(--header-bg); color:#fff; border-color:var(--header-bg); }
+  .sel-bar button.danger { background:#cc2222; color:#fff; border-color:#cc2222; }
+  .sel-bar button.active { box-shadow:0 0 0 2px var(--sel) inset; font-weight:bold; }
+  .sel-bar button:disabled { opacity:.45; cursor:default; }
+  .sel-bar label.chk { font-size:12px; display:inline-flex; align-items:center; gap:6px; color:var(--muted); }
+
+  /* Modal */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.5); z-index:999; align-items:center; justify-content:center; }
+  .modal-overlay.open { display:flex; }
+  .modal { background:var(--surface); color:var(--text); border-radius:8px; padding:22px; min-width:280px; max-height:94vh; overflow:auto; box-shadow:0 4px 24px rgba(0,0,0,.35); }
+  .modal h3 { margin-bottom:14px; color:var(--accent); font-size:15px; }
+  .modal label { display:block; font-size:12px; margin-bottom:3px; color:var(--muted); }
+  .modal input, .modal select { width:100%; padding:7px 10px; border:1px solid var(--border-strong); border-radius:4px; font-size:13px; margin-bottom:11px; background:var(--input-bg); color:var(--text); }
+  .modal .btns { display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap; }
+  .modal .btns button { padding:7px 18px; border-radius:4px; border:1px solid var(--border-strong); cursor:pointer; font-size:13px; background:var(--btn-bg); color:var(--text); }
+  .modal .btns button.ok { background:var(--header-bg); color:#fff; border-color:var(--header-bg); }
+  .modal .btns button.danger { background:#cc2222; color:#fff; border-color:#cc2222; }
+  #horasCalculadas { font-size:12px; color:var(--text); margin-bottom:12px; font-weight:bold; }
+
+  .status-bar { background:var(--status-bg); border-top:1px solid var(--status-border); padding:4px 16px; font-size:11px; color:var(--muted); }
+
+  .report-panel { margin:16px; background:var(--surface); border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,.15); }
+  .report-panel h2, details.report-panel > summary { background:var(--header-bg); color:#fff; padding:8px 14px; font-size:13px; border-radius:6px 6px 0 0; }
+  details.report-panel > summary { cursor:pointer; list-style:none; display:flex; align-items:center; justify-content:space-between; font-weight:bold; border-radius:6px; min-height:40px; }
+  details.report-panel[open] > summary { border-radius:6px 6px 0 0; }
+  details.report-panel > summary::-webkit-details-marker { display:none; }
+  details.report-panel > summary::after { content:'▾'; font-size:15px; transition:transform .15s; }
+  details.report-panel:not([open]) > summary::after { transform:rotate(-90deg); }
+  .report-controls { display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:14px; }
+  .report-controls label { font-size:12px; font-weight:bold; color:var(--muted); }
+  .report-controls select, .report-controls input { padding:6px 9px; border:1px solid var(--border-strong); border-radius:4px; font-size:12px; }
+  .report-controls button.primary { padding:7px 16px; }
+  .rep-sub { display:inline-flex; gap:8px; align-items:center; }
+  #reportResult { border-top:1px solid var(--border); }
+  table.rep-table { width:100%; border-collapse:collapse; font-size:12px; }
+  table.rep-table th, table.rep-table td { border:1px solid var(--table-border); padding:5px 8px; text-align:center; }
+  table.rep-table thead th { background:var(--table-head-bg); color:var(--accent); }
+  table.rep-table tfoot td { background:var(--table-foot-bg); font-weight:bold; }
+  .rbtn { color:#fff; padding:7px 16px; border-radius:4px; cursor:pointer; font-size:12px; border-width:1px; border-style:solid; }
+  .cfg-in { padding:7px 10px; font-size:12px; }
+  .cfg-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .cfg-actions button, .cfg-form button { padding:7px 14px; border:1px solid var(--border-strong); border-radius:4px; cursor:pointer; font-size:12px; background:var(--btn-bg); color:var(--text); }
+  .cfg-actions button.primary, .cfg-form button.primary { background:var(--header-bg); color:#fff; border-color:var(--header-bg); }
+  .cfg-actions button.danger { background:#cc2222; color:#fff; border-color:#cc2222; }
+  .cfg-form { display:none; gap:8px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+  .cfg-note { font-size:11px; color:var(--muted); margin-top:6px; line-height:1.4; }
+
+  /* Pantalla de bloqueo */
+  .lock-overlay { display:none; position:fixed; inset:0; z-index:5000; background:var(--bg); align-items:center; justify-content:center; padding:20px; }
+  html.locked .lock-overlay { display:flex; }
+  html.locked body > *:not(.lock-overlay):not(script) { display:none !important; }
+  .lock-box { background:var(--surface); border-radius:12px; padding:28px 24px; width:100%; max-width:340px; text-align:center; box-shadow:0 4px 24px rgba(0,0,0,.3); }
+  .lock-box img { border-radius:14px; margin-bottom:10px; }
+  .lock-box h2 { font-size:16px; color:var(--accent); margin-bottom:6px; }
+  .lock-box p { font-size:12px; color:var(--muted); margin-bottom:14px; }
+  .lock-box input { width:100%; text-align:center; font-size:22px; letter-spacing:8px; padding:10px; margin-bottom:10px; border:1px solid var(--border-strong); border-radius:6px; }
+  .lock-box button { width:100%; padding:11px; margin-top:6px; border-radius:6px; border:1px solid var(--border-strong); background:var(--btn-bg); color:var(--text); font-size:14px; cursor:pointer; }
+  .lock-box button.primary { background:var(--header-bg); color:#fff; border-color:var(--header-bg); }
+  #lockMsg { min-height:18px; font-size:12px; color:var(--err); font-weight:bold; }
+
+  /* Pantallas estrechas (móvil en vertical): un mes por fila, a todo el ancho disponible; los
+     diálogos suben desde la parte inferior (más cómodo para el pulgar). */
+  @media (max-width: 600px) {
+    .month-card { flex-basis:100%; max-width:100%; }
+    .calendar-grid { padding:10px 8px; gap:12px; }
+    header { padding:10px 14px; }
+    .year-nav .info-badge { margin-left:0; width:100%; }
+    .modal-overlay { align-items:flex-end; }
+    .modal { width:100%; max-height:92vh; border-radius:16px 16px 0 0; padding:20px 18px calc(20px + env(safe-area-inset-bottom)); }
+    .modal .btns button { flex:1; }
+    .report-panel { margin:10px 8px; }
+    .hint { margin:8px; font-size:10.5px; }
+    .toolbar { padding:6px 8px; gap:6px; }
+    .toolbar .sep { display:none; }
+    .toolbar button { padding:6px 9px; }
+    .month-nav { flex:1 1 100%; justify-content:space-between; }
+    .month-nav #monthDisplay { flex:1; min-width:0; }
+    .year-nav { padding:8px; gap:6px; }
+    .year-nav .info-badge { display:none; }
+    body.vista-mes .year-nav { display:none; }
+    .toolbar .mode-label, .year-nav .nav-label { display:none; }
+    #modeToolbar button { flex:1; justify-content:center; }
+    #viewToolbar button.cat-btn, #viewToolbar > button { flex:1 1 auto; justify-content:center; }
+    #viewToolbar .month-nav { order:5; }
+    .t-long, .hint-more { display:none; }
+  }
+  @media (min-width: 601px) { .t-short { display:none; } }
+  /* Móvil en horizontal: poca altura */
+  @media (max-height: 480px) and (orientation: landscape) {
+    .modal { max-height:98vh; padding:12px 18px; }
+    .modal input, .modal select { margin-bottom:6px; }
+    .month-card.detailed .month-table td { height:42px; }
+    .month-card.detailed .month-table td .day-num { line-height:26px; }
+    .lock-box { padding:14px 20px; }
+  }
+  /* Pantallas táctiles: objetivos de pulsación de al menos 44 px y texto de 16 px en los campos
+     (evita el zoom automático al enfocar un campo en Android). */
+  @media (pointer: coarse) {
+    .toolbar button, .sel-bar button, .report-controls button, .cfg-actions button, .cfg-form button,
+    .year-nav button, .modal .btns button, .rbtn { min-height:44px; font-size:14px; }
+    select, input[type=text], input[type=password], input[type=date], .report-controls select, .report-controls input, .modal input, .modal select { min-height:44px; font-size:16px; }
+    .month-table td { height:44px; }
+    .month-table td .day-num { line-height:44px; font-size:15px; }
+    .month-card.detailed .month-table td { height:58px; }
+    .month-card.detailed .month-table td .day-num { line-height:38px; }
+    .toolbar { gap:10px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🕒 Control de Horas Trabajadas</h1>
+  <span class="badge">Calendario laboral · Comunitat Valenciana</span>
+</header>
+
+<details class="report-panel" id="configPanel">
+  <summary>⚙️ Gestión de horas</summary>
+  <div class="report-controls" style="align-items:flex-start;flex-direction:column;gap:16px;padding-bottom:10px">
+
+    <div style="width:100%">
+      <label style="display:block;margin-bottom:6px;font-size:12px">👤 Datos del trabajador</label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <input type="text" id="cfgNombre" placeholder="Nombre y apellidos" class="cfg-in" style="flex:1;min-width:220px">
+        <input type="text" id="cfgDni" placeholder="DNI (12345678Z)" maxlength="9" class="cfg-in" style="width:150px;text-transform:uppercase">
+        <span id="cfgDniFeedback" style="font-size:11px;font-weight:bold"></span>
+        <input type="text" id="cfgOtroDoc" placeholder="Otro documento identificativo (pasaporte, NIE...)" class="cfg-in" style="min-width:220px;flex:1">
+      </div>
+    </div>
+
+    <div style="width:100%">
+      <label style="display:block;margin-bottom:6px;font-size:12px">🔀 Tipo de jornada</label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="cfgTipoJornada">
+          <option value="continua">Jornada continua (un solo tramo)</option>
+          <option value="partida">Jornada partida (dos tramos, p. ej. mañana y tarde)</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="width:100%">
+      <label style="display:block;margin-bottom:6px;font-size:12px">🎯 Precisión horaria <span class="muted">(intervalo entre las horas seleccionables)</span></label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="cfgPrecision">
+          <option value="30">Cada 30 minutos</option>
+          <option value="15">Cada 15 minutos</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="width:100%" id="bloqueTramo1">
+      <label style="display:block;margin-bottom:6px;font-size:12px" id="labelJornada1">🕒 Intervalo de la jornada <span class="muted">(rango completo de 24 h; delimita las opciones del intervalo predeterminado)</span></label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="cfgJornadaInicio"></select>
+        <span style="font-size:12px;color:var(--muted)">a</span>
+        <select id="cfgJornadaFin"></select>
+      </div>
+      <label style="display:block;margin:10px 0 6px;font-size:12px" id="labelPredeterminado1">⭐ Intervalo predeterminado <span class="muted">(valores que se preseleccionan al marcar un día; acotado por la jornada)</span></label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="cfgDefEntrada"></select>
+        <span style="font-size:12px;color:var(--muted)">a</span>
+        <select id="cfgDefSalida"></select>
+      </div>
+    </div>
+
+    <div style="width:100%;display:none;border-top:1px dashed var(--border-strong);padding-top:14px" id="bloqueTramo2">
+      <label style="display:block;margin-bottom:6px;font-size:12px">🕒 Tramo 2 — Intervalo de la jornada <span class="muted">(puede solaparse con el tramo 1; algunos días varía)</span></label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="cfgJornadaInicio2"></select>
+        <span style="font-size:12px;color:var(--muted)">a</span>
+        <select id="cfgJornadaFin2"></select>
+      </div>
+      <label style="display:block;margin:10px 0 6px;font-size:12px">⭐ Tramo 2 — Intervalo predeterminado <span class="muted">(no puede solaparse con el predeterminado del tramo 1)</span></label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="cfgDefEntrada2"></select>
+        <span style="font-size:12px;color:var(--muted)">a</span>
+        <select id="cfgDefSalida2"></select>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:12px;align-items:center">
+      <button class="primary" onclick="guardarConfiguracion()">💾 Guardar configuración</button>
+      <span id="cfgStatus" style="font-size:11px;color:var(--ok);font-weight:bold"></span>
+    </div>
+  </div>
+</details>
+
+<details class="report-panel" id="panelDatos">
+  <summary>🛡️ Datos y seguridad</summary>
+  <div class="report-controls" style="align-items:flex-start;flex-direction:column;gap:18px;padding-bottom:14px">
+
+    <div style="width:100%">
+      <label style="display:block;margin-bottom:6px;font-size:12px">🎨 Apariencia</label>
+      <select id="cfgTema" onchange="onTemaChange()">
+        <option value="auto">Automática (según el móvil)</option>
+        <option value="claro">Clara</option>
+        <option value="oscuro">Oscura</option>
+      </select>
+    </div>
+
+    <div style="width:100%">
+      <label style="display:block;margin-bottom:6px;font-size:12px">💾 Copia de seguridad <span class="muted">(los datos están solo en este dispositivo)</span></label>
+      <div class="cfg-actions">
+        <button class="primary" onclick="exportarCopia(false)">📤 Exportar copia (compartir / guardar)</button>
+        <button onclick="exportarCopia(true)">⬇ Descargar archivo</button>
+        <button onclick="document.getElementById('archivoCopia').click()">📥 Importar copia</button>
+        <input type="file" id="archivoCopia" accept=".json,.txt,application/json,text/plain" style="display:none" onchange="importarCopiaArchivo(this.files[0]); this.value=''">
+      </div>
+      <div class="cfg-note"><b id="copiaEstado"></b></div>
+      <div class="cfg-note" id="persistEstado"></div>
+      <div class="cfg-note">Si desinstalas la app, borras sus datos o cambias de móvil, los registros se pierden. Exporta una copia de vez en cuando (por ejemplo, guárdala en Drive) e impórtala en el nuevo dispositivo.</div>
+    </div>
+
+    <div style="width:100%">
+      <label style="display:block;margin-bottom:6px;font-size:12px">🔐 Bloqueo de la aplicación</label>
+      <div style="font-size:12px;margin-bottom:8px" id="bloqueoEstado"></div>
+      <div class="cfg-actions">
+        <button class="primary" id="btnPinActivar" onclick="mostrarFormPin('activar')">Activar bloqueo con PIN</button>
+        <button id="btnPinCambiar" onclick="mostrarFormPin('cambiar')" style="display:none">Cambiar PIN</button>
+        <button class="danger" id="btnPinQuitar" onclick="mostrarFormPin('desactivar')" style="display:none">Desactivar bloqueo</button>
+      </div>
+      <div class="cfg-form" id="formPin">
+        <input type="password" id="pinActual" inputmode="numeric" maxlength="6" placeholder="PIN actual" autocomplete="off" style="width:130px">
+        <input type="password" id="pinNuevo" inputmode="numeric" maxlength="6" placeholder="Nuevo PIN (4-6 dígitos)" autocomplete="off" style="width:190px">
+        <input type="password" id="pinNuevo2" inputmode="numeric" maxlength="6" placeholder="Repetir PIN" autocomplete="off" style="width:130px">
+        <button class="primary" id="pinGuardar" onclick="confirmarFormPin()">Guardar</button>
+        <button onclick="ocultarFormPin()">Cancelar</button>
+        <span id="pinMsg" style="font-size:11px;font-weight:bold;width:100%"></span>
+      </div>
+      <label id="bioRow" class="chk" style="display:none;align-items:center;gap:8px;font-size:12px;margin-top:10px;color:var(--text)">
+        <input type="checkbox" id="chkBio" onchange="onBioChange()"> Permitir también huella / biometría del dispositivo
+      </label>
+      <div class="cfg-note">Se pide el PIN al abrir la app y al volver a ella tras más de 1 minuto en segundo plano. Es un bloqueo de pantalla: protege frente a quien coja tu móvil, pero no cifra los datos. Si olvidas el PIN tendrás que borrar los datos de la app (por eso conviene tener una copia).</div>
+    </div>
+  </div>
+</details>
+
+<div class="year-nav" id="yearNav">
+  <span class="nav-label">Año:</span>
+  <button class="yn-arrow" onclick="shiftAnio(-1)">◀</button>
+  <span class="year-display" id="yearDisplay">2026</span>
+  <button class="yn-arrow" onclick="shiftAnio(1)">▶</button>
+  <div id="yearTabs" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+  <span class="info-badge" id="infoBadge"></span>
+</div>
+
+<div class="toolbar" id="modeToolbar">
+  <span class="mode-label">Modo:</span>
+  <button id="modeHorasBtn" class="cat-btn active" onclick="setMode('horas')">🕒 <span class="t-long">Registrar horas</span><span class="t-short">Horas</span></button>
+  <button id="modeCalBtn" class="cat-btn" onclick="setMode('calendario')">📅 <span class="t-long">Editar calendario (festivos)</span><span class="t-short">Festivos</span></button>
+</div>
+
+<div class="toolbar" id="toolbarCalendario" style="display:none">
+  <span class="mode-label">Categoría activa:</span>
+  <button id="catFestBtn" onclick="setActiveCat('fest')" class="cat-btn active" style="border-color:#cc2222">
+    <span class="cat-sw" style="background:var(--festivo-bg)"></span> Festivo oficial
+  </button>
+  <button id="catLocalBtn" onclick="setActiveCat('local')" class="cat-btn">
+    <span class="cat-sw" style="background:var(--local-bg)"></span> Festivo local
+  </button>
+  <button id="catVacBtn" onclick="setActiveCat('vacaciones')" class="cat-btn">
+    <span class="cat-sw" style="background:var(--vacaciones-bg)"></span> Periodo vacacional
+  </button>
+  <div class="sep"></div>
+  <button onclick="addDiaManual()" class="primary">＋ Añadir día</button>
+  <div class="sep"></div>
+  <button onclick="resetFestivos()">↺ Restablecer festivos oficiales + agosto</button>
+  <button onclick="clearActiveCat()" class="danger">✕ Borrar categoría activa</button>
+  <div class="sep"></div>
+  <button onclick="buscarFestivosInternet()" style="background:#2a6a5a;color:#fff;border-color:#2a6a5a">🌐 Buscar e incorporar festivos nacionales</button>
+  <button onclick="buscarFestivosAutonomicos()" style="background:#5a7a9a;color:#fff;border-color:#5a7a9a">📍 Buscar festivos autonómicos/locales (por tu ubicación)</button>
+</div>
+
+<div class="toolbar" id="viewToolbar">
+  <span class="mode-label">Vista:</span>
+  <button id="viewMesBtn" class="cat-btn" onclick="setVista('mes')">📅 Mes</button>
+  <button id="viewAnioBtn" class="cat-btn" onclick="setVista('anio')">🗓 Año</button>
+  <span class="sep"></span>
+  <span id="monthNav" class="month-nav">
+    <button onclick="shiftMes(-1)" aria-label="Mes anterior">◀</button>
+    <span id="monthDisplay"></span>
+    <button onclick="shiftMes(1)" aria-label="Mes siguiente">▶</button>
+  </span>
+  <button onclick="irAHoy()">📍 Hoy</button>
+  <span class="sep"></span>
+  <button id="btnMulti" class="cat-btn" onclick="toggleSeleccion()">☑ <span class="t-long">Seleccionar varios días</span><span class="t-short">Varios</span></button>
+</div>
+
+<div class="hint" id="hintHoras">ℹ️ <b>Registrar horas:</b> toca un día para anotar la entrada y la salida. <span class="hint-more">(Las horas aparecen bajo el número en la vista de mes, y un punto azul en la vista anual). También puedes registrar fines de semana y festivos si trabajaste. Para aplicar <b>las mismas horas a varios días</b>, pulsa «☑ Seleccionar varios días», marca los días (o un rango) y pulsa «Aplicar horas». En la vista de mes, desliza el dedo para cambiar de mes.</span></div>
+<div class="hint" id="hintCalendario" style="display:none">ℹ️ <b>Clic</b> en un día: marca o desmarca con la categoría activa. <b>Alt+Clic</b> en un segundo día: marca todos los días del rango. Para años sin festivos precargados, usa "🌐 Buscar e incorporar festivos nacionales" (automático, solo festivos comunes a toda España) y "📍 Buscar festivos autonómicos/locales" (te pedirá permiso de ubicación para orientar la búsqueda a tu comunidad/municipio; si lo rechazas, busca de forma genérica).</div>
+
+<div class="calendar-grid" id="calendarGrid"></div>
+
+<div class="sel-bar" id="selBar" style="display:none">
+  <div class="sel-info"><b id="selCount">0</b> días seleccionados <span id="selHint" style="color:var(--muted);font-size:12px"></span></div>
+  <div class="sel-row">
+    <button id="btnLabMes" onclick="seleccionarLaborablesVista()">Laborables del mes</button>
+    <button id="btnRango" onclick="armarRango()">↔ Rango</button>
+    <button id="btnLimpiarSel" onclick="limpiarSeleccion()">Limpiar</button>
+    <label class="chk"><input type="checkbox" id="selIncluirNoLab"> incluir fines de semana y festivos en «laborables» y «rango»</label>
+  </div>
+  <div class="sel-row">
+    <button class="primary" id="btnAplicarSel" onclick="aplicarHorasSeleccion()">🕒 Aplicar horas…</button>
+    <button class="danger" id="btnQuitarSel" onclick="quitarHorasSeleccion()">Quitar horas</button>
+    <button onclick="toggleSeleccion(false)">Salir</button>
+  </div>
+</div>
+
+<div class="report-panel" id="panelInforme">
+  <h2>📊 Informe de horas trabajadas</h2>
+  <div class="report-controls">
+    <label>Tipo:</label>
+    <select id="repTipo" onchange="onRepTipoChange()">
+      <option value="mensual">Mensual</option>
+      <option value="anual">Anual</option>
+      <option value="intervalo">Intervalo personalizado</option>
+    </select>
+    <span id="repMensualCtrl" class="rep-sub">
+      <select id="repMes"></select>
+      <select id="repAnioM"></select>
+    </span>
+    <span id="repAnualCtrl" class="rep-sub" style="display:none">
+      <select id="repAnioA"></select>
+    </span>
+    <span id="repIntervaloCtrl" class="rep-sub" style="display:none">
+      <input type="date" id="repDesde"> <span style="font-size:12px;color:var(--muted)">a</span> <input type="date" id="repHasta">
+    </span>
+    <button class="primary" onclick="generarInforme()">Generar informe</button>
+  </div>
+  <div id="reportResult"></div>
+</div>
+
+<!-- Modal: añadir día festivo/local/vacaciones (modo calendario) -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h3 id="modalTitle">Añadir día</h3>
+    <label>Fecha</label>
+    <input type="date" id="modalDate" />
+    <div class="btns">
+      <button onclick="closeModal()">Cancelar</button>
+      <button class="ok" onclick="confirmAddFestivo()">Añadir</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: registrar horas (modo horas) -->
+<div class="modal-overlay" id="modalHorasOverlay">
+  <div class="modal">
+    <h3>Registrar horas — <span id="modalHorasFecha"></span></h3>
+    <div id="modalHorasAviso" class="aviso" style="display:none"></div>
+    <label id="tramo1Label">Hora de entrada</label>
+    <select id="selEntrada1"></select>
+    <label id="tramo1LabelSalida">Hora de salida</label>
+    <select id="selSalida1"></select>
+    <div id="modalTramo2Block" style="display:none">
+      <label>Tramo 2 — Hora de entrada</label>
+      <select id="selEntrada2"></select>
+      <label>Tramo 2 — Hora de salida</label>
+      <select id="selSalida2"></select>
+    </div>
+    <div id="horasCalculadas"></div>
+    <div class="btns">
+      <button onclick="closeModalHoras()">Cancelar</button>
+      <button id="btnEliminarHoras" class="danger" style="display:none" onclick="eliminarRegistroHoras()">Eliminar registro</button>
+      <button class="ok" id="btnGuardarHoras" onclick="confirmarHoras()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar" id="statusBar">Listo.</div>
+
+<div class="lock-overlay" id="lockOverlay">
+  <div class="lock-box">
+    <img src="icons/icon-96.png" width="72" height="72" alt="">
+    <h2>Gestión de Horarios de Trabajo</h2>
+    <p>Introduce tu PIN para continuar</p>
+    <input type="password" id="lockPin" inputmode="numeric" maxlength="6" autocomplete="off" aria-label="PIN">
+    <div id="lockMsg"></div>
+    <button class="primary" id="lockBtn">Desbloquear</button>
+    <button id="lockBioBtn" style="display:none">👆 Usar huella / biometría</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════
+// CONSTANTES
+// ═══════════════════════════════════════════════════════════════════════
+const ANIO_BASE = 2026;
+const TABS_VISIBLE = 5;
+const MESES_NOMBRE = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+// Generador de listas de horas en intervalos de 30 min entre dos minutos del día.
+function generateTimeOptions(startMin,endMin,step) {
+  const out=[];
+  for (let m=startMin;m<=endMin;m+=step) {
+    const h=Math.floor(m/60), mm=m%60;
+    out.push(String(h).padStart(2,'0')+':'+String(mm).padStart(2,'0'));
+  }
+  return out;
+}
+function timeToMinutes(t){ const [h,m]=t.split(':').map(Number); return h*60+m; }
+
+// ── Configuración de jornada / predeterminado / trabajador (gestión de horas) ──
+const CONFIG_KEY = 'config_horas_app';
+const CONFIG_DEFAULTS = {
+  nombre:'', dni:'', otroDoc:'',
+  tipoJornada:'continua', // 'continua' | 'partida'
+  precisionMinutos:30, // 15 | 30
+  jornadaInicio:'07:00', jornadaFin:'16:00', defEntrada:'07:30', defSalida:'15:30',
+  jornadaInicio2:'16:00', jornadaFin2:'20:00', defEntrada2:'17:00', defSalida2:'19:00',
+};
+function loadConfig() {
+  try { const raw = localStorage.getItem(CONFIG_KEY); return raw ? {...CONFIG_DEFAULTS, ...JSON.parse(raw)} : {...CONFIG_DEFAULTS}; }
+  catch(e) { return {...CONFIG_DEFAULTS}; }
+}
+function saveConfigData(cfg) { localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg)); APP_CONFIG = cfg; }
+let APP_CONFIG = loadConfig();
+
+// El rango de la jornada abarca las 24 h completas (00:00 a 24:00), en pasos de la
+// precisión configurada (15 o 30 min). Si no se indica "step" explícito, se usa la
+// precisión ya guardada (APP_CONFIG); el panel de configuración pasa la precisión que
+// esté seleccionada en pantalla en cada momento, aunque todavía no se haya guardado.
+function jornadaOptionsCompletas(step) { return generateTimeOptions(0, 24*60, step || APP_CONFIG.precisionMinutos || 30); }
+// El intervalo predeterminado (y las opciones que se ofrecen al marcar un día) quedan
+// acotados por la jornada configurada.
+function opcionesDentroDeJornada(jornadaInicio, jornadaFin, step) {
+  const s = step || APP_CONFIG.precisionMinutos || 30;
+  let iniMin = timeToMinutes(jornadaInicio), finMin = timeToMinutes(jornadaFin);
+  if (finMin <= iniMin) finMin = iniMin + s; // salvaguarda ante una configuración inválida
+  return generateTimeOptions(iniMin, finMin, s);
+}
+// tramo: 1 o 2. En jornada continua solo existe el tramo 1.
+function getDayTimeOptions(tramo) {
+  if (tramo === 2) return opcionesDentroDeJornada(APP_CONFIG.jornadaInicio2, APP_CONFIG.jornadaFin2);
+  return opcionesDentroDeJornada(APP_CONFIG.jornadaInicio, APP_CONFIG.jornadaFin);
+}
+function esJornadaPartida() { return APP_CONFIG.tipoJornada === 'partida'; }
+// Dos intervalos [a1,a2) y [b1,b2) se solapan si empiezan antes de que termine el otro.
+function intervalosSolapan(a1,a2,b1,b2) { return timeToMinutes(a1) < timeToMinutes(b2) && timeToMinutes(b1) < timeToMinutes(a2); }
+
+// ── Validación de DNI/NIE (letra de control) ──
+const LETRAS_DNI = 'TRWAGMYFPDXBNJZSQVHLCKE';
+function validarDniNie(valor) {
+  const v = String(valor||'').toUpperCase().replace(/[\s-]/g,'');
+  if (v === '') return { valid:null, msg:'' }; // vacío: sin validar, campo opcional
+  const m = v.match(/^([XYZ]?)(\d{7,8})([A-Z])$/);
+  if (!m) return { valid:false, msg:'✕ Formato incorrecto (8 dígitos + letra, o X/Y/Z + 7 dígitos + letra)' };
+  const prefijo = { '':'', X:'0', Y:'1', Z:'2' }[m[1]];
+  const numero = parseInt(prefijo + m[2], 10);
+  const letraEsperada = LETRAS_DNI[numero % 23];
+  if (m[3] !== letraEsperada) return { valid:false, msg:`✕ Letra incorrecta (sería ${letraEsperada})` };
+  return { valid:true, msg:'✓ DNI/NIE válido' };
+}
+
+// Festivos oficiales (nacionales + autonómicos) de la Comunitat Valenciana para 2026
+// Decreto 100/2025, de 1 de julio, del Consell (DOGV 07/07/2025)
+const FESTIVOS_OFICIALES_CV_2026 = {
+  '2026-01-01':'fest', '2026-01-06':'fest', '2026-03-19':'fest', '2026-04-03':'fest',
+  '2026-04-06':'fest', '2026-05-01':'fest', '2026-06-24':'fest', '2026-08-15':'fest',
+  '2026-10-09':'fest', '2026-10-12':'fest', '2026-12-08':'fest', '2026-12-25':'fest',
+};
+// Festivos locales de ejemplo (Requena 2026). Categoría editable.
+const FESTIVOS_LOCALES_2026 = {
+  '2026-03-27':'local', '2026-04-13':'local',
+};
+function agostoVacaciones(year) {
+  const o = {}; const dias = dim(year,7);
+  for (let d=1; d<=dias; d++) o[dateKey(year,7,d)] = 'vacaciones';
+  return o;
+}
+function defaultsForYear(year) {
+  const base = { ...agostoVacaciones(year) };
+  if (year === ANIO_BASE) Object.assign(base, FESTIVOS_OFICIALES_CV_2026, FESTIVOS_LOCALES_2026);
+  return base;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ESTADO
+// ═══════════════════════════════════════════════════════════════════════
+let currentYear = ANIO_BASE;
+let tabOffset = 0;
+let lastClickedKey = null;
+let currentMode = 'horas'; // 'horas' | 'calendario'
+let _horasEditKeys = [];
+let viewMode = 'anio';            // 'mes' | 'anio' (se decide al iniciar)
+let currentMonth = new Date().getMonth();
+const selDias = new Set();        // selección de varios días (claves AAAA-MM-DD)
+let modoSeleccion = false, rangoArmado = false, rangoInicio = null;
+
+function storageKey(y) { return `festivos_laboral_${y}`; }
+function loadFestivos(y) {
+  try { const raw = localStorage.getItem(storageKey(y)); if (raw) return JSON.parse(raw); return defaultsForYear(y); }
+  catch(e) { return defaultsForYear(y); }
+}
+function saveFestivos(y, data) { localStorage.setItem(storageKey(y), JSON.stringify(data)); }
+function getFestivos() { return loadFestivos(currentYear); }
+function setFestivos(data) { saveFestivos(currentYear, data); }
+
+function horasStorageKey(y) { return `horas_trabajadas_${y}`; }
+function loadHoras(y) {
+  try { const raw = localStorage.getItem(horasStorageKey(y)); return raw ? JSON.parse(raw) : {}; }
+  catch(e) { return {}; }
+}
+function saveHoras(y, data) { localStorage.setItem(horasStorageKey(y), JSON.stringify(data)); }
+function getHoras() { return loadHoras(currentYear); }
+function setHoras(data) { saveHoras(currentYear, data); }
+
+function catOf(val) { return (val==='local'||val==='vacaciones') ? val : 'fest'; }
+let activeCat = 'fest';
+function setActiveCat(cat) {
+  activeCat = cat;
+  document.getElementById('catFestBtn').classList.toggle('active', cat === 'fest');
+  document.getElementById('catLocalBtn').classList.toggle('active', cat === 'local');
+  document.getElementById('catVacBtn').classList.toggle('active', cat === 'vacaciones');
+}
+
+function setMode(m) {
+  currentMode = m; lastClickedKey = null;
+  if (m !== 'horas' && modoSeleccion) toggleSeleccion(false);
+  document.getElementById('btnMulti').style.display = m === 'horas' ? '' : 'none';
+  document.getElementById('modeHorasBtn').classList.toggle('active', m==='horas');
+  document.getElementById('modeCalBtn').classList.toggle('active', m==='calendario');
+  document.getElementById('toolbarCalendario').style.display = m==='calendario' ? 'flex' : 'none';
+  document.getElementById('hintHoras').style.display = m==='horas' ? 'block' : 'none';
+  document.getElementById('hintCalendario').style.display = m==='calendario' ? 'block' : 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════════
+function getMesesAnio(y) { const m=[]; for (let i=0;i<=11;i++) m.push({year:y, month:i}); return m; }
+function mesLabel(y,m)    { return `${MESES_NOMBRE[m]} ${y}`; }
+function dateKey(y,m,d)   { return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
+function isWeekend(y,m,d) { const w=new Date(y,m,d).getDay(); return w===0||w===6; }
+function dim(y,m)         { return new Date(y,m+1,0).getDate(); }
+function calcularHoras(entrada,salida) {
+  const [eh,em]=entrada.split(':').map(Number), [sh,sm]=salida.split(':').map(Number);
+  return ((sh*60+sm)-(eh*60+em))/60;
+}
+// Un registro de horas de un día puede tener 1 tramo (jornada continua) o 2 (jornada
+// partida). Los registros antiguos, guardados como {entrada,salida} sueltos, se
+// normalizan aquí a la misma forma {tramos:[...]} para no tener que migrar nada.
+function normalizeRecord(rec) {
+  if (!rec) return null;
+  if (Array.isArray(rec.tramos)) return rec;
+  if (rec.entrada && rec.salida) return { tramos: [{ entrada: rec.entrada, salida: rec.salida }] };
+  return null;
+}
+function calcularHorasRecord(rec) {
+  const n = normalizeRecord(rec);
+  if (!n) return 0;
+  return n.tramos.reduce((s,t) => s + calcularHoras(t.entrada, t.salida), 0);
+}
+function formatFechaCorta(key){ const [y,m,d]=key.split('-'); return `${d}/${m}/${y}`; }
+function formatFechaLarga(key){ const d=new Date(key+'T12:00:00'); return `${d.getDate()} de ${MESES_NOMBRE[d.getMonth()].toLowerCase()} de ${d.getFullYear()}`; }
+const DIAS_SEMANA_ABREV = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+function diaSemana(key){ const d=new Date(key+'T12:00:00'); return DIAS_SEMANA_ABREV[d.getDay()]; }
+
+// ═══════════════════════════════════════════════════════════════════════
+// NAV AÑOS
+// ═══════════════════════════════════════════════════════════════════════
+function buildYearTabs() {
+  const c = document.getElementById('yearTabs');
+  c.innerHTML = '';
+  for (let i=0;i<TABS_VISIBLE;i++) {
+    const y = ANIO_BASE-1+tabOffset+i;
+    const b = document.createElement('button');
+    b.className = 'yn'+(y===currentYear?' active':'');
+    b.textContent = y;
+    b.onclick = ()=>setAnio(y);
+    c.appendChild(b);
+  }
+  document.getElementById('yearDisplay').textContent = currentYear;
+  const fests = getFestivos(); const horas = getHoras();
+  let nFest=0,nLocal=0,nVac=0;
+  for (const k of Object.keys(fests)) { const c2=catOf(fests[k]); if(c2==='local')nLocal++; else if(c2==='vacaciones')nVac++; else nFest++; }
+  let totalHoras=0; for (const k of Object.keys(horas)) totalHoras += calcularHorasRecord(horas[k]);
+  const badge = document.getElementById('infoBadge');
+  badge.textContent = `📌 ${nFest} festivos · ${nLocal} locales · ${nVac} días de vacaciones · 🕒 ${totalHoras.toFixed(2)} h registradas`;
+}
+function shiftAnio(dir) { setAnio(currentYear+dir); }
+function setAnio(y) {
+  currentYear=y; lastClickedKey=null;
+  if (y<ANIO_BASE-1+tabOffset) tabOffset=y-(ANIO_BASE-1);
+  if (y>=ANIO_BASE-1+tabOffset+TABS_VISIBLE) tabOffset=y-(ANIO_BASE-1)-TABS_VISIBLE+1;
+  buildYearTabs(); renderCalendar();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// RENDER CALENDARIO — vista de un mes (móvil) o de los 12 meses (año)
+// ═══════════════════════════════════════════════════════════════════════
+const VISTA_KEY = 'vista_app';
+function hoyKey() { const t=new Date(); return dateKey(t.getFullYear(), t.getMonth(), t.getDate()); }
+function cargarVista() {
+  let v = null;
+  try { v = localStorage.getItem(VISTA_KEY); } catch(e) {}
+  if (v !== 'mes' && v !== 'anio') v = (window.innerWidth <= 700) ? 'mes' : 'anio';
+  return v;
+}
+function setVista(v) {
+  viewMode = v;
+  try { localStorage.setItem(VISTA_KEY, v); } catch(e) {}
+  renderCalendar();
+}
+function shiftMes(dir) {
+  let m = currentMonth + dir, y = currentYear;
+  if (m < 0) { m = 11; y--; } else if (m > 11) { m = 0; y++; }
+  currentMonth = m;
+  if (y !== currentYear) setAnio(y); else renderCalendar();
+}
+function irAHoy() {
+  const t = new Date();
+  currentMonth = t.getMonth();
+  if (t.getFullYear() !== currentYear) setAnio(t.getFullYear()); else renderCalendar();
+  if (viewMode === 'anio') {
+    const card = document.querySelector(`#calendarGrid .month-card[data-month="${currentMonth}"]`);
+    if (card && card.scrollIntoView) card.scrollIntoView({ block:'start', behavior:'smooth' });
+  }
+}
+function actualizarNavMes() {
+  const mes = viewMode === 'mes';
+  document.body.classList.toggle('vista-mes', mes);
+  document.getElementById('monthNav').style.display = mes ? 'inline-flex' : 'none';
+  document.getElementById('monthDisplay').textContent = mesLabel(currentYear, currentMonth);
+  document.getElementById('viewMesBtn').classList.toggle('active', mes);
+  document.getElementById('viewAnioBtn').classList.toggle('active', !mes);
+}
+
+function renderCalendar() {
+  const grid = document.getElementById('calendarGrid');
+  grid.innerHTML = '';
+  grid.classList.toggle('single', viewMode === 'mes');
+  const fests = getFestivos(); const horasMap = getHoras();
+  const meses = viewMode === 'mes' ? [{year:currentYear, month:currentMonth}] : getMesesAnio(currentYear);
+  for (const {year,month} of meses) grid.appendChild(buildMonthCard(year,month,fests,horasMap, viewMode === 'mes'));
+  actualizarNavMes(); refrescarSeleccionVisual(); actualizarBarraSeleccion();
+  updateStatus(); buildYearTabs();
+}
+
+function formatHorasCorto(h) { return Number(h.toFixed(2)) + 'h'; }
+
+function buildMonthCard(year,month,fests,horasMap,detailed) {
+  const card = document.createElement('div');
+  card.className = 'month-card' + (detailed ? ' detailed' : '');
+  card.dataset.month = month;
+  const hdr = document.createElement('div');
+  hdr.className = 'month-header';
+  hdr.textContent = mesLabel(year,month).toUpperCase();
+  card.appendChild(hdr);
+
+  const table = document.createElement('table');
+  table.className = 'month-table';
+  const thead = document.createElement('thead');
+  const hrow = document.createElement('tr');
+  ['L','M','X','J','V','S','D'].forEach(d=>{ const th=document.createElement('th'); th.textContent=d; hrow.appendChild(th); });
+  thead.appendChild(hrow); table.appendChild(thead);
+
+  const hoy = hoyKey();
+  const tbody = document.createElement('tbody');
+  const firstDow = new Date(year,month,1).getDay();
+  const offset = firstDow===0?6:firstDow-1;
+  const days = dim(year,month);
+  let day=1;
+  for (let row=0;row<6;row++) {
+    const tr=document.createElement('tr');
+    let hasContent=false;
+    for (let col=0;col<7;col++) {
+      const idx=row*7+col;
+      const td=document.createElement('td');
+      if (idx<offset||day>days) { td.className='empty'; td.innerHTML='&nbsp;'; }
+      else {
+        hasContent=true;
+        const d=day, key=dateKey(year,month,d);
+        const weekend=isWeekend(year,month,d);
+        const marked=!weekend&&Object.prototype.hasOwnProperty.call(fests,key);
+        const cat = marked ? catOf(fests[key]) : null;
+        let cls = weekend?'weekend':(cat==='local'?'local':cat==='vacaciones'?'vacaciones':cat==='fest'?'festivo':'');
+        if (key === hoy) cls += ' today';
+        const rec = normalizeRecord(horasMap[key]);
+        let horasRec = 0;
+        if (rec) {
+          cls += ' worked';
+          horasRec = calcularHorasRecord(rec);
+          const partes = rec.tramos.map(t=>`${t.entrada}-${t.salida}`).join(' / ');
+          td.title = `${partes} · ${horasRec.toFixed(2)} h`;
+        }
+        td.className = cls.trim();
+        const sp=document.createElement('span'); sp.className='day-num'; sp.textContent=d; td.appendChild(sp);
+        if (rec && detailed) {
+          const hs=document.createElement('span'); hs.className='day-hrs'; hs.textContent=formatHorasCorto(horasRec); td.appendChild(hs);
+        }
+        td.addEventListener('click',onDayClick);
+        td.dataset.key=key;
+        day++;
+      }
+      tr.appendChild(td);
+    }
+    if (hasContent||row===0) tbody.appendChild(tr);
+    if (day>days) break;
+  }
+  table.appendChild(tbody); card.appendChild(table);
+  return card;
+}
+
+// Deslizar el dedo a izquierda/derecha cambia de mes (solo en la vista de un mes).
+(function(){
+  const grid = document.getElementById('calendarGrid');
+  let tx = null, ty = null;
+  grid.addEventListener('touchstart', e => {
+    if (viewMode !== 'mes' || e.touches.length !== 1) { tx = null; return; }
+    tx = e.touches[0].clientX; ty = e.touches[0].clientY;
+  }, { passive:true });
+  grid.addEventListener('touchend', e => {
+    if (tx === null) return;
+    const t = e.changedTouches[0], dx = t.clientX - tx, dy = t.clientY - ty;
+    tx = null;
+    if (Math.abs(dx) > 60 && Math.abs(dy) < 45) shiftMes(dx < 0 ? 1 : -1);
+  }, { passive:true });
+})();
+
+// El botón "Atrás" de Android cierra primero los diálogos y la selección de varios días en
+// lugar de salir de la aplicación: mientras haya algo abierto se mantiene una entrada extra
+// en el historial del navegador.
+let _ovPushed = false, _ignorePop = false;
+function overlayNecesario() {
+  return modoSeleccion
+    || document.getElementById('modalHorasOverlay').classList.contains('open')
+    || document.getElementById('modalOverlay').classList.contains('open');
+}
+function ovSync() {
+  const need = overlayNecesario();
+  if (need && !_ovPushed) { try { history.pushState({ov:1}, ''); _ovPushed = true; } catch(e) {} }
+  else if (!need && _ovPushed) { _ovPushed = false; _ignorePop = true; try { history.back(); } catch(e) { _ignorePop = false; } }
+}
+window.addEventListener('popstate', () => {
+  if (_ignorePop) { _ignorePop = false; return; }
+  if (!_ovPushed) return;
+  _ovPushed = false;
+  if (document.getElementById('modalHorasOverlay').classList.contains('open')) closeModalHoras();
+  else if (document.getElementById('modalOverlay').classList.contains('open')) closeModal();
+  else if (modoSeleccion) toggleSeleccion(false);
+  ovSync();
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// INTERACCIÓN — enrutado según modo
+// ═══════════════════════════════════════════════════════════════════════
+function onDayClick(e) {
+  const key = e.currentTarget.dataset.key;
+  if (!key) return;
+  if (currentMode === 'horas') { onDayClickHoras(key); return; }
+  onDayClickCalendario(e, key);
+}
+
+// ── Modo: Registrar horas ──
+function onDayClickHoras(key) {
+  if (modoSeleccion) { onDiaSeleccion(key); return; }
+  abrirModalHoras([key]);
+}
+// Un día es "laborable" si no es fin de semana y no está marcado como festivo/local/vacaciones.
+// "cache" evita releer los festivos de un año para cada día cuando se consultan muchos.
+function esDiaLaborable(key, cache) {
+  const [y,m,d] = key.split('-').map(Number);
+  if (isWeekend(y,m-1,d)) return false;
+  let fests = cache ? cache[y] : null;
+  if (!fests) { fests = loadFestivos(y); if (cache) cache[y] = fests; }
+  return !Object.prototype.hasOwnProperty.call(fests, key);
+}
+// keys: un día, o varios (selección múltiple: se aplican las mismas horas a todos).
+function abrirModalHoras(keys) {
+  _horasEditKeys = keys.slice();
+  const multi = keys.length > 1;
+  const partida = esJornadaPartida();
+  const recs = keys.map(k => normalizeRecord(loadHoras(parseInt(k.slice(0,4),10))[k]));
+  const conHoras = recs.filter(Boolean).length;
+
+  document.getElementById('modalHorasFecha').textContent = multi ? `${keys.length} días seleccionados` : formatFechaLarga(keys[0]);
+
+  const avisoEl = document.getElementById('modalHorasAviso');
+  const avisos = [];
+  if (multi) {
+    const cache = {};
+    const noLab = keys.filter(k => !esDiaLaborable(k, cache)).length;
+    if (noLab) avisos.push(`⚠ La selección incluye ${noLab} ${noLab===1 ? 'día que es fin de semana, festivo o vacaciones' : 'días que son fin de semana, festivos o vacaciones'}; se registrarán igualmente.`);
+    if (conHoras) avisos.push(`⚠ ${conHoras} ${conHoras===1 ? 'día ya tiene' : 'días ya tienen'} horas registradas y se sobrescribirán.`);
+  } else {
+    const key = keys[0];
+    const [ky,km,kd] = key.split('-').map(Number);
+    const weekend = isWeekend(ky, km-1, kd);
+    const fests = loadFestivos(ky);
+    const marcado = Object.prototype.hasOwnProperty.call(fests, key);
+    if (weekend || marcado) {
+      const etiquetas = [];
+      if (weekend) etiquetas.push('fin de semana');
+      if (marcado) {
+        const cat = catOf(fests[key]);
+        etiquetas.push(cat==='local' ? 'festivo local' : cat==='vacaciones' ? 'periodo vacacional' : 'festivo oficial');
+      }
+      avisos.push(`⚠ Este día es ${etiquetas.join(' y ')}. Se muestra a modo orientativo; puedes registrar horas igualmente si trabajaste.`);
+    }
+  }
+  if (avisos.length) { avisoEl.innerHTML = avisos.join('<br>'); avisoEl.style.display = 'block'; }
+  else avisoEl.style.display = 'none';
+
+  document.getElementById('tramo1Label').textContent = partida ? 'Tramo 1 — Hora de entrada' : 'Hora de entrada';
+  document.getElementById('tramo1LabelSalida').textContent = partida ? 'Tramo 1 — Hora de salida' : 'Hora de salida';
+
+  // Si todos los días seleccionados tienen exactamente el mismo registro, se parte de él;
+  // en cualquier otro caso se parte del intervalo predeterminado.
+  const prev = (recs[0] && recs.every(r => r && JSON.stringify(r) === JSON.stringify(recs[0]))) ? recs[0] : null;
+
+  const opciones1 = getDayTimeOptions(1);
+  const tramo1Prev = prev && prev.tramos[0];
+  fillTimeSelect('selEntrada1', opciones1, tramo1Prev ? tramo1Prev.entrada : APP_CONFIG.defEntrada);
+  fillTimeSelect('selSalida1', opciones1, tramo1Prev ? tramo1Prev.salida : APP_CONFIG.defSalida);
+
+  document.getElementById('modalTramo2Block').style.display = partida ? 'block' : 'none';
+  if (partida) {
+    const opciones2 = getDayTimeOptions(2);
+    const tramo2Prev = prev && prev.tramos[1];
+    fillTimeSelect('selEntrada2', opciones2, tramo2Prev ? tramo2Prev.entrada : APP_CONFIG.defEntrada2);
+    fillTimeSelect('selSalida2', opciones2, tramo2Prev ? tramo2Prev.salida : APP_CONFIG.defSalida2);
+  }
+
+  const btnDel = document.getElementById('btnEliminarHoras');
+  btnDel.style.display = conHoras ? 'inline-block' : 'none';
+  btnDel.textContent = multi ? 'Eliminar registros' : 'Eliminar registro';
+  document.getElementById('btnGuardarHoras').textContent = multi ? `Aplicar a ${keys.length} días` : 'Guardar';
+  updateHorasCalculadas();
+  document.getElementById('modalHorasOverlay').classList.add('open');
+  ovSync();
+}
+function fillTimeSelect(id, options, defaultVal) {
+  const sel = document.getElementById(id);
+  sel.innerHTML = '';
+  for (const t of options) {
+    const o=document.createElement('option'); o.value=t; o.textContent=t;
+    if (t===defaultVal) o.selected=true;
+    sel.appendChild(o);
+  }
+  if (!options.includes(defaultVal) && options.length) sel.value = options[0];
+}
+function updateHorasCalculadas() {
+  const e1 = document.getElementById('selEntrada1').value;
+  const s1 = document.getElementById('selSalida1').value;
+  const h1 = calcularHoras(e1,s1);
+  const el = document.getElementById('horasCalculadas');
+
+  if (h1<=0) { el.textContent='⚠ Tramo 1: la hora de salida debe ser posterior a la de entrada.'; el.style.color='var(--err)'; return; }
+
+  if (esJornadaPartida()) {
+    const e2 = document.getElementById('selEntrada2').value;
+    const s2 = document.getElementById('selSalida2').value;
+    const h2 = calcularHoras(e2,s2);
+    if (h2<=0) { el.textContent='⚠ Tramo 2: la hora de salida debe ser posterior a la de entrada.'; el.style.color='var(--err)'; return; }
+    el.textContent = `Total: ${(h1+h2).toFixed(2)} horas (Tramo 1: ${h1.toFixed(2)} h + Tramo 2: ${h2.toFixed(2)} h)`;
+    el.style.color = 'var(--ok)';
+    return;
+  }
+  el.textContent = `Total: ${h1.toFixed(2)} horas`;
+  el.style.color = 'var(--ok)';
+}
+document.getElementById('selEntrada1').addEventListener('change', updateHorasCalculadas);
+document.getElementById('selSalida1').addEventListener('change', updateHorasCalculadas);
+document.getElementById('selEntrada2').addEventListener('change', updateHorasCalculadas);
+document.getElementById('selSalida2').addEventListener('change', updateHorasCalculadas);
+
+function confirmarHoras() {
+  const e1 = document.getElementById('selEntrada1').value;
+  const s1 = document.getElementById('selSalida1').value;
+  if (calcularHoras(e1,s1)<=0) { alert('Tramo 1: la hora de salida debe ser posterior a la de entrada.'); return; }
+  const tramos = [{ entrada:e1, salida:s1 }];
+
+  if (esJornadaPartida()) {
+    const e2 = document.getElementById('selEntrada2').value;
+    const s2 = document.getElementById('selSalida2').value;
+    if (calcularHoras(e2,s2)<=0) { alert('Tramo 2: la hora de salida debe ser posterior a la de entrada.'); return; }
+    tramos.push({ entrada:e2, salida:s2 });
+  }
+
+  // Los días se agrupan por año porque cada año se guarda en su propia clave.
+  const porAnio = {};
+  for (const k of _horasEditKeys) {
+    const y = parseInt(k.slice(0,4),10);
+    if (!porAnio[y]) porAnio[y] = loadHoras(y);
+    porAnio[y][k] = { tramos: tramos.map(t => ({...t})) };
+  }
+  for (const y of Object.keys(porAnio)) saveHoras(parseInt(y,10), porAnio[y]);
+
+  const n = _horasEditKeys.length;
+  closeModalHoras();
+  if (n > 1) limpiarSeleccion(false);
+  renderCalendar();
+  if (n > 1) document.getElementById('statusBar').textContent = `✓ Horas aplicadas a ${n} días.`;
+}
+function eliminarRegistroHoras() {
+  const n = _horasEditKeys.length;
+  if (n > 1 && !confirm(`¿Eliminar las horas registradas en los ${n} días seleccionados?`)) return;
+  const porAnio = {};
+  for (const k of _horasEditKeys) {
+    const y = parseInt(k.slice(0,4),10);
+    if (!porAnio[y]) porAnio[y] = loadHoras(y);
+    delete porAnio[y][k];
+  }
+  for (const y of Object.keys(porAnio)) saveHoras(parseInt(y,10), porAnio[y]);
+  closeModalHoras();
+  if (n > 1) limpiarSeleccion(false);
+  renderCalendar();
+}
+function closeModalHoras() {
+  document.getElementById('modalHorasOverlay').classList.remove('open');
+  _horasEditKeys = [];
+  ovSync();
+}
+document.getElementById('modalHorasOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModalHoras();});
+
+// ── Selección de varios días (para aplicar las mismas horas a todos) ──
+function toggleSeleccion(forzar) {
+  modoSeleccion = (typeof forzar === 'boolean') ? forzar : !modoSeleccion;
+  if (!modoSeleccion) { selDias.clear(); rangoArmado = false; rangoInicio = null; }
+  document.body.classList.toggle('modo-seleccion', modoSeleccion);
+  document.getElementById('btnMulti').classList.toggle('active', modoSeleccion);
+  document.getElementById('selBar').style.display = modoSeleccion ? 'block' : 'none';
+  actualizarBarraSeleccion(); refrescarSeleccionVisual(); ovSync();
+}
+function onDiaSeleccion(key) {
+  if (rangoArmado) {
+    if (!rangoInicio) { rangoInicio = key; selDias.add(key); }
+    else { agregarRango(rangoInicio, key); rangoArmado = false; rangoInicio = null; }
+  } else if (selDias.has(key)) selDias.delete(key);
+  else selDias.add(key);
+  actualizarBarraSeleccion(); refrescarSeleccionVisual();
+}
+function incluirNoLaborables() { return document.getElementById('selIncluirNoLab').checked; }
+function agregarRango(a, b) {
+  const incluir = incluirNoLaborables(), cache = {};
+  let d1 = new Date(a+'T12:00:00'), d2 = new Date(b+'T12:00:00');
+  if (d1 > d2) [d1, d2] = [d2, d1];
+  for (const d = new Date(d1); d <= d2; d.setDate(d.getDate()+1)) {
+    const k = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
+    if (k === a || k === b || incluir || esDiaLaborable(k, cache)) selDias.add(k);
+  }
+}
+function armarRango() {
+  rangoArmado = !rangoArmado; rangoInicio = null;
+  actualizarBarraSeleccion(); refrescarSeleccionVisual();
+}
+// Marca los días laborables del mes que se está viendo (o de todo el año en la vista anual).
+function seleccionarLaborablesVista() {
+  const incluir = incluirNoLaborables(), cache = {};
+  const meses = viewMode === 'mes' ? [currentMonth] : [0,1,2,3,4,5,6,7,8,9,10,11];
+  for (const m of meses) for (let d = 1; d <= dim(currentYear, m); d++) {
+    const k = dateKey(currentYear, m, d);
+    if (incluir || esDiaLaborable(k, cache)) selDias.add(k);
+  }
+  actualizarBarraSeleccion(); refrescarSeleccionVisual();
+}
+function limpiarSeleccion(actualizar) {
+  selDias.clear(); rangoArmado = false; rangoInicio = null;
+  if (actualizar !== false) { actualizarBarraSeleccion(); refrescarSeleccionVisual(); }
+  else { actualizarBarraSeleccion(); }
+}
+function aplicarHorasSeleccion() {
+  if (!selDias.size) return;
+  abrirModalHoras([...selDias].sort());
+}
+function quitarHorasSeleccion() {
+  const keys = [...selDias];
+  const conHoras = keys.filter(k => normalizeRecord(loadHoras(parseInt(k.slice(0,4),10))[k]));
+  if (!conHoras.length) { alert('Ninguno de los días seleccionados tiene horas registradas.'); return; }
+  if (!confirm(`¿Quitar las horas registradas de ${conHoras.length} ${conHoras.length===1?'día':'días'}?`)) return;
+  const porAnio = {};
+  for (const k of conHoras) {
+    const y = parseInt(k.slice(0,4),10);
+    if (!porAnio[y]) porAnio[y] = loadHoras(y);
+    delete porAnio[y][k];
+  }
+  for (const y of Object.keys(porAnio)) saveHoras(parseInt(y,10), porAnio[y]);
+  limpiarSeleccion(false); renderCalendar();
+  document.getElementById('statusBar').textContent = `✓ Horas quitadas de ${conHoras.length} días.`;
+}
+function actualizarBarraSeleccion() {
+  const n = selDias.size;
+  document.getElementById('selCount').textContent = n;
+  document.getElementById('selHint').textContent = rangoArmado
+    ? (rangoInicio ? '· Toca el ÚLTIMO día del rango' : '· Toca el PRIMER día del rango')
+    : '· Toca los días para marcarlos o desmarcarlos';
+  document.getElementById('btnRango').classList.toggle('active', rangoArmado);
+  document.getElementById('btnLabMes').textContent = viewMode === 'mes' ? 'Laborables del mes' : 'Laborables del año';
+  document.getElementById('btnAplicarSel').disabled = n === 0;
+  document.getElementById('btnQuitarSel').disabled = n === 0;
+  document.getElementById('btnLimpiarSel').disabled = n === 0 && !rangoArmado;
+}
+function refrescarSeleccionVisual() {
+  document.querySelectorAll('#calendarGrid td[data-key]').forEach(td => {
+    td.classList.toggle('selected', selDias.has(td.dataset.key));
+    td.classList.toggle('rango-inicio', td.dataset.key === rangoInicio);
+  });
+}
+
+// ── Modo: Editar calendario (festivos/local/vacaciones) ──
+function onDayClickCalendario(e, key) {
+  const [ky,km,kd] = key.split('-').map(Number);
+  if (isWeekend(ky, km-1, kd)) {
+    document.getElementById('statusBar').textContent = `El ${formatFechaCorta(key)} es fin de semana: ya se muestra como tal automáticamente, no se marca con categorías.`;
+    return;
+  }
+  const fests = getFestivos();
+  if (e.altKey && lastClickedKey && lastClickedKey !== key) {
+    selectRange(lastClickedKey, key, fests);
+    lastClickedKey = key;
+    return;
+  }
+  const has = Object.prototype.hasOwnProperty.call(fests, key);
+  if (has && catOf(fests[key]) === activeCat) delete fests[key];
+  else fests[key] = activeCat;
+  setFestivos(fests);
+  lastClickedKey = key;
+  renderCalendar();
+}
+function selectRange(fromKey, toKey, fests) {
+  const a = new Date(fromKey+'T12:00:00'), b = new Date(toKey+'T12:00:00');
+  const start = a<b ? a : b, end = a<b ? b : a;
+  const valid = new Set(getMesesAnio(currentYear).map(m=>`${m.year}-${m.month}`));
+  const d = new Date(start);
+  while (d <= end) {
+    const y=d.getFullYear(), mo=d.getMonth(), dy=d.getDate();
+    if (valid.has(`${y}-${mo}`) && !isWeekend(y,mo,dy)) fests[dateKey(y,mo,dy)] = activeCat;
+    d.setDate(d.getDate()+1);
+  }
+  setFestivos(fests); renderCalendar();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MODAL — añadir festivo/local/vacaciones manual (modo calendario)
+// ═══════════════════════════════════════════════════════════════════════
+let _pFests=null;
+function addDiaManual() {
+  _pFests=getFestivos();
+  document.getElementById('modalDate').value='';
+  const catLabel = activeCat==='local' ? 'festivo local' : activeCat==='vacaciones' ? 'periodo vacacional' : 'festivo oficial';
+  document.getElementById('modalTitle').textContent = 'Añadir día — ' + catLabel;
+  document.getElementById('modalOverlay').classList.add('open'); ovSync();
+  setTimeout(()=>document.getElementById('modalDate').focus(),40);
+}
+function confirmAddFestivo() {
+  const date=document.getElementById('modalDate').value;
+  if (!date){alert('Introduce una fecha.');return;}
+  const fests=_pFests||getFestivos();
+  fests[date]=activeCat;
+  setFestivos(fests); closeModal(); renderCalendar();
+}
+function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); _pFests=null; ovSync(); }
+document.getElementById('modalOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal();});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){closeModal();closeModalHoras();}
+  if(e.key==='Enter') {
+    if(document.getElementById('modalOverlay').classList.contains('open')) confirmAddFestivo();
+    if(document.getElementById('modalHorasOverlay').classList.contains('open')) confirmarHoras();
+  }
+});
+
+function resetFestivos() {
+  const msg = `¿Restaurar los festivos oficiales de la Comunitat Valenciana y el periodo vacacional de agosto para ${currentYear}?\n(Los festivos locales que hayas añadido no se modifican.)`;
+  if (confirm(msg)) {
+    const fests = getFestivos();
+    const localDays = {};
+    for (const k of Object.keys(fests)) if (catOf(fests[k])==='local') localDays[k]='local';
+    setFestivos({...defaultsForYear(currentYear), ...localDays});
+    renderCalendar();
+  }
+}
+function clearActiveCat() {
+  const catLabel = activeCat==='local' ? 'festivos locales' : activeCat==='vacaciones' ? 'periodo vacacional' : 'festivos oficiales';
+  if (confirm(`¿Borrar todos los días de la categoría «${catLabel}» de ${currentYear}?`)) {
+    const fests = getFestivos();
+    for (const k of Object.keys(fests)) if (catOf(fests[k])===activeCat) delete fests[k];
+    setFestivos(fests); renderCalendar();
+  }
+}
+function updateStatus() {
+  const fests = getFestivos(); const horas = getHoras();
+  let nFest=0, nLocal=0, nVac=0;
+  for (const k of Object.keys(fests)) { const c=catOf(fests[k]); if(c==='local')nLocal++; else if(c==='vacaciones')nVac++; else nFest++; }
+  let totalHoras=0, nDias=0;
+  for (const k of Object.keys(horas)) { totalHoras += calcularHorasRecord(horas[k]); nDias++; }
+  document.getElementById('statusBar').textContent=`Año ${currentYear} · ${nFest} festivos oficiales · ${nLocal} festivos locales · ${nVac} días de vacaciones · ${nDias} días con horas registradas (${totalHoras.toFixed(2)} h)`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// BUSCAR FESTIVOS EN INTERNET (para años sin datos precargados)
+// ═══════════════════════════════════════════════════════════════════════
+// Festivos nacionales (comunes a toda España): se intentan obtener automáticamente
+// de la API pública Nager.Date. Es una fuente sin garantías oficiales: siempre conviene
+// contrastarla, y en cualquier caso NO incluye los festivos autonómicos de la Comunitat
+// Valenciana (San José, Lunes de Pascua, San Juan, Día de la Comunitat Valenciana) ni
+// los festivos locales de cada municipio, que hay que añadir a mano.
+async function buscarFestivosInternet() {
+  const year = currentYear;
+  document.getElementById('statusBar').textContent = `Buscando festivos nacionales de España para ${year}...`;
+  try {
+    const resp = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/ES`);
+    if (!resp.ok) throw new Error('HTTP '+resp.status);
+    const data = await resp.json();
+    if (!Array.isArray(data) || data.length===0) throw new Error('Sin datos para ese año');
+
+    const fests = getFestivos();
+    const nuevos = data.filter(h => !Object.prototype.hasOwnProperty.call(fests, h.date));
+    const listado = data.map(h => `${formatFechaCorta(h.date)} — ${h.localName || h.name}`).join('\n');
+    const msg = `Se han encontrado ${data.length} festivos nacionales de España para ${year} (fuente: Nager.Date, sin garantía oficial):\n\n${listado}\n\n¿Añadirlos como "festivo oficial"? (${nuevos.length} son nuevos; los ya marcados no se tocan.)\n\nOjo: esta fuente NO incluye San José, Lunes de Pascua, San Juan, el Día de la Comunitat Valenciana ni los festivos locales — usa "Buscar festivos autonómicos/locales" para esos.`;
+    if (confirm(msg)) {
+      for (const h of data) if (!Object.prototype.hasOwnProperty.call(fests, h.date)) fests[h.date] = 'fest';
+      setFestivos(fests); renderCalendar();
+      document.getElementById('statusBar').textContent = `Añadidos ${nuevos.length} festivos nacionales nuevos para ${year}. Añade ahora los autonómicos y locales que falten.`;
+    } else {
+      document.getElementById('statusBar').textContent = `Búsqueda de festivos nacionales cancelada.`;
+    }
+  } catch (err) {
+    console.warn('No se pudieron obtener festivos automáticamente:', err);
+    document.getElementById('statusBar').textContent = `No se pudo conectar con el servicio de festivos (puede requerir conexión a internet); se abre una búsqueda en el navegador.`;
+    buscarFestivosAutonomicos();
+  }
+}
+
+// Los festivos autonómicos/locales varían por comunidad y municipio y no existe una API
+// pública fiable para consultarlos: se usa la geolocalización del dispositivo (con permiso
+// explícito del navegador) para saber en qué comunidad/municipio buscar, y se abre una
+// búsqueda ya orientada a esa zona para localizarlos y añadirlos a mano con "＋ Añadir día".
+function buscarFestivosAutonomicosGenerico(motivo) {
+  const year = currentYear;
+  const q = encodeURIComponent(`calendario laboral festivos Comunitat Valenciana ${year} DOGV`);
+  window.open(`https://www.google.com/search?q=${q}`, '_blank');
+  document.getElementById('statusBar').textContent = `${motivo} Se ha abierto una búsqueda genérica (Comunitat Valenciana) de festivos autonómicos/locales de ${year}; añádelos con "＋ Añadir día".`;
+}
+function buscarFestivosAutonomicos() {
+  const year = currentYear;
+  if (!navigator.geolocation) {
+    buscarFestivosAutonomicosGenerico('Tu navegador no permite geolocalización.');
+    return;
+  }
+  document.getElementById('statusBar').textContent = '📍 Solicitando permiso de ubicación para orientar la búsqueda de festivos a tu comunidad/municipio…';
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      try {
+        const { latitude, longitude } = pos.coords;
+        document.getElementById('statusBar').textContent = `📍 Ubicación obtenida (${latitude.toFixed(3)}, ${longitude.toFixed(3)}); identificando comunidad/municipio…`;
+        const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&accept-language=es`);
+        if (!resp.ok) throw new Error('HTTP '+resp.status);
+        const data = await resp.json();
+        const addr = data.address || {};
+        const municipio = addr.town || addr.city || addr.village || addr.municipality || addr.county || '';
+        const ccaa = addr.state || '';
+        if (!municipio && !ccaa) throw new Error('Sin datos de dirección');
+        const lugar = [municipio, ccaa].filter(Boolean).join(', ');
+        const q = encodeURIComponent(`calendario laboral festivos ${municipio} ${ccaa} ${year}`.replace(/\s+/g,' ').trim());
+        window.open(`https://www.google.com/search?q=${q}`, '_blank');
+        document.getElementById('statusBar').textContent = `📍 Ubicación detectada mediante geolocalización: ${lugar}. Se ha abierto la búsqueda de festivos para esa zona; añádelos con "＋ Añadir día".`;
+      } catch (err) {
+        console.warn('No se pudo determinar la ubicación a partir de las coordenadas:', err);
+        buscarFestivosAutonomicosGenerico('No se pudo identificar la comunidad/municipio a partir de tu ubicación.');
+      }
+    },
+    (err) => {
+      console.warn('Geolocalización denegada o no disponible:', err);
+      buscarFestivosAutonomicosGenerico('No se ha concedido permiso de ubicación (o no está disponible).');
+    },
+    { timeout: 8000 }
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// INFORMES — mensual / anual / intervalo
+// ═══════════════════════════════════════════════════════════════════════
+let lastReportRows=null, lastReportTitle='', lastReportSubtitle='', lastReportTotals=null, lastReportPeriodo='';
+
+function populateReportSelectors() {
+  const mesSel=document.getElementById('repMes');
+  mesSel.innerHTML='';
+  MESES_NOMBRE.forEach((m,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=m; mesSel.appendChild(o); });
+  mesSel.value = new Date().getMonth();
+
+  const anios=[]; for (let y=ANIO_BASE-1;y<=ANIO_BASE+4;y++) anios.push(y);
+  ['repAnioM','repAnioA'].forEach(id=>{
+    const s=document.getElementById(id); s.innerHTML='';
+    anios.forEach(y=>{ const o=document.createElement('option'); o.value=y; o.textContent=y; s.appendChild(o); });
+    s.value = currentYear;
+  });
+  const today = new Date();
+  document.getElementById('repDesde').value = `${today.getFullYear()}-01-01`;
+  document.getElementById('repHasta').value = today.toISOString().slice(0,10);
+}
+function onRepTipoChange() {
+  const t=document.getElementById('repTipo').value;
+  document.getElementById('repMensualCtrl').style.display = t==='mensual' ? 'inline-flex' : 'none';
+  document.getElementById('repAnualCtrl').style.display = t==='anual' ? 'inline-flex' : 'none';
+  document.getElementById('repIntervaloCtrl').style.display = t==='intervalo' ? 'inline-flex' : 'none';
+}
+
+function generarInforme() {
+  const tipo=document.getElementById('repTipo').value;
+  let desde, hasta, subtitulo, periodoTexto;
+  if (tipo==='mensual') {
+    const mes=parseInt(document.getElementById('repMes').value,10);
+    const anio=parseInt(document.getElementById('repAnioM').value,10);
+    desde=new Date(anio,mes,1); hasta=new Date(anio,mes+1,0);
+    subtitulo=`Informe mensual — ${MESES_NOMBRE[mes]} ${anio}`;
+    periodoTexto=`de ${MESES_NOMBRE[mes].toLowerCase()} de ${anio}`;
+  } else if (tipo==='anual') {
+    const anio=parseInt(document.getElementById('repAnioA').value,10);
+    desde=new Date(anio,0,1); hasta=new Date(anio,11,31);
+    subtitulo=`Informe anual — ${anio}`;
+    periodoTexto=`del año ${anio}`;
+  } else {
+    const dS=document.getElementById('repDesde').value, hS=document.getElementById('repHasta').value;
+    if (!dS||!hS) { alert('Selecciona ambas fechas.'); return; }
+    desde=new Date(dS+'T00:00:00'); hasta=new Date(hS+'T00:00:00');
+    if (desde>hasta) { alert('La fecha "desde" debe ser anterior a "hasta".'); return; }
+    subtitulo=`Informe — del ${formatFechaCorta(dS)} al ${formatFechaCorta(hS)}`;
+    periodoTexto=`comprendido entre el ${formatFechaCorta(dS)} y el ${formatFechaCorta(hS)}`;
+  }
+
+  const rows=[];
+  for (let y=desde.getFullYear(); y<=hasta.getFullYear(); y++) {
+    const horas=loadHoras(y);
+    for (const key of Object.keys(horas)) {
+      const d=new Date(key+'T12:00:00');
+      if (d>=desde && d<=hasta) {
+        const rec=normalizeRecord(horas[key]);
+        if (!rec) continue;
+        rows.push({ fecha:key, fechaFmt:formatFechaCorta(key), dia:diaSemana(key), tramos:rec.tramos, horas:calcularHorasRecord(rec) });
+      }
+    }
+  }
+  rows.sort((a,b)=>a.fecha.localeCompare(b.fecha));
+  const totalHoras=rows.reduce((s,r)=>s+r.horas,0);
+
+  const idTrabajador = nombreDniLinea();
+  lastReportRows=rows;
+  lastReportTitle = idTrabajador ? `Informe de horas trabajadas — ${idTrabajador}` : 'Informe de horas trabajadas';
+  lastReportSubtitle=subtitulo;
+  lastReportPeriodo=periodoTexto;
+  lastReportTotals={ dias:rows.length, horas:totalHoras };
+  renderReportResult(lastReportTitle, subtitulo, rows, lastReportTotals);
+}
+
+function renderReportResult(titulo, subtitulo, rows, totals) {
+  const el=document.getElementById('reportResult');
+  if (rows.length===0) {
+    el.innerHTML = `<p style="padding:14px;color:var(--err);"><b>${titulo}</b><br>${subtitulo}<br>No hay horas registradas en este periodo.</p>`;
+    return;
+  }
+  const dosTramos = rows.some(r => r.tramos.length > 1);
+  let html = `<h3 style="padding:10px 14px 0;color:var(--accent);font-size:14px">${titulo}</h3>`;
+  html += `<div style="padding:2px 14px 6px;color:var(--muted);font-size:12px">${subtitulo}</div>`;
+  html += '<div style="overflow-x:auto;padding:0 14px"><table class="rep-table"><thead><tr><th>Día</th><th>Fecha</th>';
+  html += dosTramos ? '<th>Entrada 1</th><th>Salida 1</th><th>Entrada 2</th><th>Salida 2</th>' : '<th>Entrada</th><th>Salida</th>';
+  html += '<th>Horas</th></tr></thead><tbody>';
+  for (const r of rows) {
+    html += `<tr><td>${r.dia}</td><td>${r.fechaFmt}</td>`;
+    html += `<td>${r.tramos[0].entrada}</td><td>${r.tramos[0].salida}</td>`;
+    if (dosTramos) html += `<td>${r.tramos[1] ? r.tramos[1].entrada : '—'}</td><td>${r.tramos[1] ? r.tramos[1].salida : '—'}</td>`;
+    html += `<td>${r.horas.toFixed(2)}</td></tr>`;
+  }
+  html += `</tbody><tfoot><tr><td colspan="${dosTramos ? 6 : 4}">Total: ${totals.dias} días trabajados</td><td>${totals.horas.toFixed(2)} h</td></tr></tfoot></table></div>`;
+  html += `<div style="padding:12px 14px 4px;display:flex;gap:10px;flex-wrap:wrap">
+    <button onclick="descargarInformePDF()" style="background:#cc2222;color:#fff;border:1px solid #cc2222" class="rbtn">⬇ Descargar PDF</button>
+    <button onclick="descargarInformeExcel()" style="background:#217346;color:#fff;border:1px solid #217346" class="rbtn">⬇ Descargar Excel</button>
+  </div>
+  <div style="padding:4px 14px 12px;display:flex;gap:10px;flex-wrap:wrap">
+    <button onclick="enviarInformePorEmail('ninguno')" style="background:#5a7a9a;color:#fff;border:1px solid #5a7a9a" class="rbtn">✉ Email sin adjunto</button>
+    <button onclick="enviarInformePorEmail('pdf')" style="background:#2a6a5a;color:#fff;border:1px solid #2a6a5a" class="rbtn">✉ Email con PDF</button>
+    <button onclick="enviarInformePorEmail('excel')" style="background:#1f7a4d;color:#fff;border:1px solid #1f7a4d" class="rbtn">✉ Email con Excel</button>
+    <button onclick="enviarInformePorEmail('ambos')" style="background:#1a4a7a;color:#fff;border:1px solid #1a4a7a" class="rbtn">✉ Email con PDF + Excel</button>
+  </div>`;
+  el.innerHTML = html;
+}
+
+// ── Generador de XLSX (ZIP construido a mano, sin dependencias externas) ──
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function strToUtf8Bytes(str) {
+  const out = [];
+  for (let i = 0; i < str.length; i++) {
+    let code = str.codePointAt(i);
+    if (code > 0xFFFF) i++;
+    if (code < 0x80) out.push(code);
+    else if (code < 0x800) out.push(0xC0 | (code >> 6), 0x80 | (code & 0x3F));
+    else if (code < 0x10000) out.push(0xE0 | (code >> 12), 0x80 | ((code >> 6) & 0x3F), 0x80 | (code & 0x3F));
+    else out.push(0xF0 | (code >> 18), 0x80 | ((code >> 12) & 0x3F), 0x80 | ((code >> 6) & 0x3F), 0x80 | (code & 0x3F));
+  }
+  return new Uint8Array(out);
+}
+function zipU16(v){ return [v & 0xFF, (v>>8)&0xFF]; }
+function zipU32(v){ return [v & 0xFF, (v>>8)&0xFF, (v>>16)&0xFF, (v>>24)&0xFF]; }
+// ZIP en modo STORE (sin comprimir): más simple y robusto que implementar DEFLATE a mano,
+// a costa de un archivo algo más grande (irrelevante para un informe de texto).
+function buildZip(files) {
+  const localParts = [], centralParts = [];
+  let offset = 0;
+  for (const f of files) {
+    const nameBytes = strToUtf8Bytes(f.name);
+    const dataBytes = strToUtf8Bytes(f.content);
+    const crc = crc32(dataBytes);
+    const size = dataBytes.length;
+    const localHeader = new Uint8Array([
+      0x50,0x4B,0x03,0x04, ...zipU16(20), ...zipU16(0), ...zipU16(0),
+      ...zipU16(0), ...zipU16(0), ...zipU32(crc), ...zipU32(size), ...zipU32(size),
+      ...zipU16(nameBytes.length), ...zipU16(0),
+    ]);
+    localParts.push(localHeader, nameBytes, dataBytes);
+    const centralHeader = new Uint8Array([
+      0x50,0x4B,0x01,0x02, ...zipU16(20), ...zipU16(20), ...zipU16(0), ...zipU16(0),
+      ...zipU16(0), ...zipU16(0), ...zipU32(crc), ...zipU32(size), ...zipU32(size),
+      ...zipU16(nameBytes.length), ...zipU16(0), ...zipU16(0),
+      ...zipU16(0), ...zipU16(0), ...zipU32(0), ...zipU32(offset),
+    ]);
+    centralParts.push(centralHeader, nameBytes);
+    offset += localHeader.length + nameBytes.length + dataBytes.length;
+  }
+  const centralStart = offset;
+  let centralSize = 0; for (const p of centralParts) centralSize += p.length;
+  const eocd = new Uint8Array([
+    0x50,0x4B,0x05,0x06, ...zipU16(0), ...zipU16(0),
+    ...zipU16(files.length), ...zipU16(files.length),
+    ...zipU32(centralSize), ...zipU32(centralStart), ...zipU16(0),
+  ]);
+  const parts = [...localParts, ...centralParts, eocd];
+  let total = 0; for (const p of parts) total += p.length;
+  const out = new Uint8Array(total);
+  let pos = 0; for (const p of parts) { out.set(p, pos); pos += p.length; }
+  return out;
+}
+function xlsxEscape(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function xlsxColLetter(n) { let s=''; n++; while(n>0){ const r=(n-1)%26; s=String.fromCharCode(65+r)+s; n=Math.floor((n-1)/26); } return s; }
+// sheetRows: array de filas, cada una array de celdas {v, type:'s'|'n', style:'normal'|'header'|'title'}
+// merges: array de rangos a fusionar, p.ej. ['A1:G1']
+function buildXlsx(sheetRows, sheetName, merges) {
+  const CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`;
+  const RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`;
+  const WORKBOOK = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="${xlsxEscape(sheetName)}" sheetId="1" r:id="rId1"/></sheets>
+</workbook>`;
+  const WORKBOOK_RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`;
+  // Paleta: azul institucional (#1a4a7a) aclarado al 50% para el bloque de título/identificación,
+  // y al 90% (muy suave, liso) para las cabeceras de columna y la fila de total.
+  const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<fonts count="2">
+<font><sz val="10"/><name val="Calibri"/></font>
+<font><b/><sz val="10"/><name val="Calibri"/><color rgb="FF1A4A7A"/></font>
+</fonts>
+<fills count="3">
+<fill><patternFill patternType="none"/></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFE8EDF2"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF8DA5BD"/><bgColor indexed="64"/></patternFill></fill>
+</fills>
+<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="3">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="1" borderId="0" xfId="0" applyFont="1" applyFill="1"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>
+</cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+
+  const STYLE_XF = { normal:'', header:' s="1"', title:' s="2"' };
+  let rowsXml = '';
+  sheetRows.forEach((row, ri) => {
+    rowsXml += `<row r="${ri+1}">`;
+    row.forEach((cell, ci) => {
+      const ref = xlsxColLetter(ci) + (ri+1);
+      const s = STYLE_XF[cell.style] || '';
+      if (cell.type === 'n') rowsXml += `<c r="${ref}"${s} t="n"><v>${cell.v}</v></c>`;
+      else rowsXml += `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${xlsxEscape(cell.v)}</t></is></c>`;
+    });
+    rowsXml += '</row>';
+  });
+  const nCols = Math.max(...sheetRows.map(r=>r.length));
+  const dim = `A1:${xlsxColLetter(nCols-1)}${sheetRows.length}`;
+  const colsXml = `<cols>${Array.from({length:nCols},(_,i)=>`<col min="${i+1}" max="${i+1}" width="14" customWidth="1"/>`).join('')}</cols>`;
+  const mergesXml = (merges && merges.length) ? `<mergeCells count="${merges.length}">${merges.map(m=>`<mergeCell ref="${m}"/>`).join('')}</mergeCells>` : '';
+  const SHEET = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<dimension ref="${dim}"/>
+<sheetViews><sheetView workbookViewId="0"/></sheetViews>
+<sheetFormatPr defaultRowHeight="15"/>
+${colsXml}
+<sheetData>${rowsXml}</sheetData>
+${mergesXml}
+</worksheet>`;
+
+  const files = [
+    { name: '[Content_Types].xml', content: CONTENT_TYPES },
+    { name: '_rels/.rels', content: RELS },
+    { name: 'xl/workbook.xml', content: WORKBOOK },
+    { name: 'xl/_rels/workbook.xml.rels', content: WORKBOOK_RELS },
+    { name: 'xl/styles.xml', content: STYLES },
+    { name: 'xl/worksheets/sheet1.xml', content: SHEET },
+  ];
+  return buildZip(files);
+}
+// Construye el libro completo del último informe: filas de identificación del trabajador
+// (mismo texto que el título del PDF), cabecera de columnas, datos y total.
+function construirLibroExcel(rows, totals) {
+  const dosTramos = rows.some(r => r.tramos.length > 1);
+  const headers = dosTramos
+    ? ['Día','Fecha','Entrada 1','Salida 1','Entrada 2','Salida 2','Horas']
+    : ['Día','Fecha','Entrada','Salida','Horas'];
+  const nCols = headers.length;
+  const fillRow = (v, style) => { const r = headers.map(()=>({v:'', type:'s', style})); r[0] = {v, type:'s', style}; return r; };
+
+  const sheetRows = [];
+  const merges = [];
+
+  // Fila 1: identificación del trabajador / título (igual que en el PDF)
+  sheetRows.push(fillRow(lastReportTitle, 'title'));
+  merges.push(`A1:${xlsxColLetter(nCols-1)}1`);
+
+  // Fila 2: periodo del informe
+  sheetRows.push(fillRow(lastReportSubtitle, 'title'));
+  merges.push(`A2:${xlsxColLetter(nCols-1)}2`);
+
+  // Fila 3: separador en blanco
+  sheetRows.push(headers.map(()=>({v:'', type:'s', style:'normal'})));
+
+  // Fila 4: cabecera de columnas
+  sheetRows.push(headers.map(h=>({v:h, type:'s', style:'header'})));
+
+  // Filas de datos
+  for (const r of rows) {
+    const t1 = r.tramos[0], t2 = r.tramos[1];
+    const fila = [{v:r.dia,type:'s',style:'normal'},{v:r.fechaFmt,type:'s',style:'normal'},{v:t1.entrada,type:'s',style:'normal'},{v:t1.salida,type:'s',style:'normal'}];
+    if (dosTramos) fila.push({v:t2?t2.entrada:'',type:'s',style:'normal'},{v:t2?t2.salida:'',type:'s',style:'normal'});
+    fila.push({v:Number(r.horas.toFixed(2)), type:'n', style:'normal'});
+    sheetRows.push(fila);
+  }
+
+  // Fila de total
+  const totalRow = [{v:'TOTAL',type:'s',style:'header'},{v:totals.dias+' días',type:'s',style:'header'}];
+  const relleno = dosTramos ? 4 : 2;
+  for (let i=0;i<relleno;i++) totalRow.push({v:'',type:'s',style:'header'});
+  totalRow.push({v:Number(totals.horas.toFixed(2)), type:'n', style:'header'});
+  sheetRows.push(totalRow);
+
+  return { sheetRows, merges };
+}
+function generarExcelBytes() {
+  const { sheetRows, merges } = construirLibroExcel(lastReportRows, lastReportTotals);
+  return buildXlsx(sheetRows, 'Informe', merges);
+}
+
+// ── Generador de PDF (sin dependencias externas) ──
+// Mapa Unicode → WinAnsiEncoding para los caracteres "especiales" de la zona 0x80-0x9F
+// (rayas, comillas tipográficas, puntos suspensivos...). Sin este mapeo, esos caracteres
+// se convertían en "?" (por eso salía la interrogación tras la raya de mes/año).
+const WINANSI_SPECIAL = {
+  0x20AC:0x80, 0x201A:0x82, 0x0192:0x83, 0x201E:0x84, 0x2026:0x85, 0x2020:0x86,
+  0x2021:0x87, 0x02C6:0x88, 0x2030:0x89, 0x0160:0x8A, 0x2039:0x8B, 0x0152:0x8C,
+  0x017D:0x8E, 0x2018:0x91, 0x2019:0x92, 0x201C:0x93, 0x201D:0x94, 0x2022:0x95,
+  0x2013:0x96, 0x2014:0x97, 0x02DC:0x98, 0x2122:0x99, 0x0161:0x9A, 0x203A:0x9B,
+  0x0153:0x9C, 0x017E:0x9E, 0x0178:0x9F
+};
+function pdfString(s) {
+  let out = '';
+  for (const ch of String(s)) {
+    const code = ch.codePointAt(0);
+    let byte;
+    if (code < 128) byte = code;
+    else if (WINANSI_SPECIAL[code] !== undefined) byte = WINANSI_SPECIAL[code];
+    else if (code >= 0xA0 && code <= 0xFF) byte = code;
+    else byte = 0x3F; // '?' solo como último recurso para lo verdaderamente no soportado
+    const c = String.fromCharCode(byte);
+    out += (c === '\\' || c === '(' || c === ')') ? '\\' + c : c;
+  }
+  return out;
+}
+// Colores del diseño (0-1), en línea con la paleta institucional del resto de herramientas
+const PDF_COLOR = {
+  brand:[0.102,0.290,0.478], gold:[0.910,0.627,0.125], headerBg:[0.933,0.953,0.980],
+  zebra:[0.969,0.976,0.988], text:[0.13,0.13,0.13], gray:[0.42,0.45,0.5], white:[1,1,1],
+};
+function pdfRg(c){ return `${c[0].toFixed(3)} ${c[1].toFixed(3)} ${c[2].toFixed(3)} rg`; }
+function pdfRG(c){ return `${c[0].toFixed(3)} ${c[1].toFixed(3)} ${c[2].toFixed(3)} RG`; }
+
+// Estima el ancho de un texto en Helvetica-Bold/Regular para elegir un tamaño de letra
+// que quepa en el ancho disponible (título más largo al incluir nombre y DNI).
+function pdfEstimateWidth(text, fontSize) { return String(text).length * fontSize * 0.6; }
+function pdfFitFontSize(text, maxWidth, sizes) {
+  for (const s of sizes) { if (pdfEstimateWidth(text, s) <= maxWidth) return s; }
+  return sizes[sizes.length-1];
+}
+
+function buildInformePdf(title, subtitle, rows, totals) {
+  const PAGE_W=595, PAGE_H=842, MARGIN_L=48, MARGIN_R=48;
+  const HEADER_H=76, FOOTER_Y=42, rowH=17;
+  const tableTopY = PAGE_H - HEADER_H - 34;
+  const bottomLimit = FOOTER_Y + 24;
+  const rowsPerPage = Math.max(5, Math.floor((tableTopY-26-bottomLimit)/rowH));
+  const tableRight = PAGE_W - MARGIN_R;
+  const dosTramos = rows.some(r => r.tramos && r.tramos.length > 1);
+  const colX = dosTramos
+    ? { dia:MARGIN_L, fecha:MARGIN_L+30, ent1:MARGIN_L+95, sal1:MARGIN_L+150, ent2:MARGIN_L+205, sal2:MARGIN_L+260, horas:MARGIN_L+320 }
+    : { dia:MARGIN_L, fecha:MARGIN_L+55, ent1:MARGIN_L+175, sal1:MARGIN_L+275, horas:MARGIN_L+375 };
+
+  const pages=[];
+  for (let i=0;i<rows.length;i+=rowsPerPage) pages.push(rows.slice(i,i+rowsPerPage));
+  if (pages.length===0) pages.push([]);
+  const totalPages=pages.length;
+
+  const now = new Date();
+  const genDate = `${String(now.getDate()).padStart(2,'0')}/${String(now.getMonth()+1).padStart(2,'0')}/${now.getFullYear()}`;
+  const titleMaxWidth = PAGE_W - MARGIN_L - MARGIN_R - (totalPages>1 ? 85 : 0);
+  const titleSize = pdfFitFontSize(title, titleMaxWidth, [17,15,13,11.5,10.5,9.5]);
+  const subtitleSize = pdfFitFontSize(subtitle, PAGE_W-MARGIN_L-MARGIN_R, [11,10,9]);
+
+  const contentStreams = pages.map((pageRows, idx) => {
+    let c = '';
+    // Banda de cabecera de color con filete dorado
+    c += pdfRg(PDF_COLOR.brand) + '\n';
+    c += `0 ${PAGE_H-HEADER_H} ${PAGE_W} ${HEADER_H} re f\n`;
+    c += pdfRg(PDF_COLOR.gold) + '\n';
+    c += `0 ${PAGE_H-HEADER_H-3} ${PAGE_W} 3 re f\n`;
+    c += pdfRg(PDF_COLOR.white) + '\n';
+    c += `BT /F2 ${titleSize} Tf ${MARGIN_L} ${PAGE_H-34} Td (${pdfString(title)}) Tj ET\n`;
+    c += `BT /F1 ${subtitleSize} Tf ${MARGIN_L} ${PAGE_H-52} Td (${pdfString(subtitle)}) Tj ET\n`;
+    if (totalPages>1) c += `BT /F1 9 Tf ${tableRight-70} ${PAGE_H-34} Td (${pdfString('Pagina '+(idx+1)+' / '+totalPages)}) Tj ET\n`;
+
+    // Cabecera de tabla con fondo
+    const headerRowH=22;
+    c += pdfRg(PDF_COLOR.headerBg) + '\n';
+    c += `${MARGIN_L} ${tableTopY-headerRowH+6} ${tableRight-MARGIN_L} ${headerRowH} re f\n`;
+    c += pdfRg(PDF_COLOR.brand) + '\n';
+    const headerTextY = tableTopY-headerRowH+6+7;
+    const hSize = dosTramos ? 8 : 9.5;
+    c += `BT /F2 ${hSize} Tf ${colX.dia} ${headerTextY} Td (Dia) Tj ET\n`;
+    c += `BT /F2 ${hSize} Tf ${colX.fecha} ${headerTextY} Td (Fecha) Tj ET\n`;
+    if (dosTramos) {
+      c += `BT /F2 ${hSize} Tf ${colX.ent1} ${headerTextY} Td (Ent.1) Tj ET\n`;
+      c += `BT /F2 ${hSize} Tf ${colX.sal1} ${headerTextY} Td (Sal.1) Tj ET\n`;
+      c += `BT /F2 ${hSize} Tf ${colX.ent2} ${headerTextY} Td (Ent.2) Tj ET\n`;
+      c += `BT /F2 ${hSize} Tf ${colX.sal2} ${headerTextY} Td (Sal.2) Tj ET\n`;
+    } else {
+      c += `BT /F2 ${hSize} Tf ${colX.ent1} ${headerTextY} Td (Entrada) Tj ET\n`;
+      c += `BT /F2 ${hSize} Tf ${colX.sal1} ${headerTextY} Td (Salida) Tj ET\n`;
+    }
+    c += `BT /F2 ${hSize} Tf ${colX.horas} ${headerTextY} Td (Horas) Tj ET\n`;
+
+    // Filas con franjas alternas
+    let y = tableTopY - headerRowH;
+    const rSize = dosTramos ? 8 : 9;
+    pageRows.forEach((r,i) => {
+      if (i % 2 === 1) {
+        c += pdfRg(PDF_COLOR.zebra) + '\n';
+        c += `${MARGIN_L} ${y-rowH+5} ${tableRight-MARGIN_L} ${rowH} re f\n`;
+      }
+      c += pdfRg(PDF_COLOR.text) + '\n';
+      const ty = y-rowH+11;
+      const t1 = r.tramos[0], t2 = r.tramos[1];
+      c += `BT /F1 ${rSize} Tf ${colX.dia} ${ty} Td (${pdfString(r.dia||'')}) Tj ET\n`;
+      c += `BT /F1 ${rSize} Tf ${colX.fecha} ${ty} Td (${pdfString(r.fecha)}) Tj ET\n`;
+      c += `BT /F1 ${rSize} Tf ${colX.ent1} ${ty} Td (${pdfString(t1.entrada)}) Tj ET\n`;
+      c += `BT /F1 ${rSize} Tf ${colX.sal1} ${ty} Td (${pdfString(t1.salida)}) Tj ET\n`;
+      if (dosTramos) {
+        c += `BT /F1 ${rSize} Tf ${colX.ent2} ${ty} Td (${pdfString(t2 ? t2.entrada : '-')}) Tj ET\n`;
+        c += `BT /F1 ${rSize} Tf ${colX.sal2} ${ty} Td (${pdfString(t2 ? t2.salida : '-')}) Tj ET\n`;
+      }
+      c += `BT /F1 ${rSize} Tf ${colX.horas} ${ty} Td (${pdfString(r.horas.toFixed(2)+' h')}) Tj ET\n`;
+      y -= rowH;
+    });
+
+    // Total (última página), remarcado con filete dorado
+    if (idx===totalPages-1) {
+      const rowBottomEdge = y + 5; // borde inferior de la franja de la última fila
+      const lineY = rowBottomEdge - 10; // deja un margen claro por debajo de esa fila
+      const totalY = lineY - 14;
+      c += pdfRG(PDF_COLOR.gold) + '\n1.2 w\n';
+      c += `${MARGIN_L} ${lineY} m ${tableRight} ${lineY} l S\n`;
+      c += pdfRg(PDF_COLOR.brand) + '\n';
+      c += `BT /F2 10.5 Tf ${MARGIN_L} ${totalY} Td (${pdfString('Total: '+totals.dias+' dias trabajados')}) Tj ET\n`;
+      c += `BT /F2 12 Tf ${colX.horas} ${totalY} Td (${pdfString(totals.horas.toFixed(2)+' h')}) Tj ET\n`;
+    }
+
+    // Pie de página
+    c += pdfRG(PDF_COLOR.headerBg) + '\n0.75 w\n';
+    c += `${MARGIN_L} ${FOOTER_Y+14} m ${tableRight} ${FOOTER_Y+14} l S\n`;
+    c += pdfRg(PDF_COLOR.gray) + '\n';
+    c += `BT /F1 7.5 Tf ${MARGIN_L} ${FOOTER_Y} Td (${pdfString('Generado el '+genDate+' - Control de Horas Trabajadas')}) Tj ET\n`;
+    c += `BT /F1 7.5 Tf ${tableRight-70} ${FOOTER_Y} Td (${pdfString('Pagina '+(idx+1)+'/'+totalPages)}) Tj ET\n`;
+    return c;
+  });
+
+  const CATALOG=1, PAGES_OBJ=2, FONT_R=3, FONT_B=4;
+  let objCount=4;
+  const contentObjNums=[], pageObjNums=[];
+  for (let p=0;p<totalPages;p++) { contentObjNums.push(++objCount); pageObjNums.push(++objCount); }
+
+  const chunks=[]; let offset=0; const offsets={};
+  function push(str){ chunks.push(str); offset += str.length; }
+  function addObj(num, body){ offsets[num]=offset; push(`${num} 0 obj\n${body}\nendobj\n`); }
+
+  push('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+  addObj(CATALOG, `<< /Type /Catalog /Pages ${PAGES_OBJ} 0 R >>`);
+  addObj(PAGES_OBJ, `<< /Type /Pages /Kids [${pageObjNums.map(n=>n+' 0 R').join(' ')}] /Count ${totalPages} >>`);
+  addObj(FONT_R, `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>`);
+  addObj(FONT_B, `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>`);
+  for (let p=0;p<totalPages;p++) {
+    const stream=contentStreams[p];
+    addObj(contentObjNums[p], `<< /Length ${stream.length} >>\nstream\n${stream}endstream`);
+    addObj(pageObjNums[p], `<< /Type /Page /Parent ${PAGES_OBJ} 0 R /MediaBox [0 0 ${PAGE_W} ${PAGE_H}] /Resources << /Font << /F1 ${FONT_R} 0 R /F2 ${FONT_B} 0 R >> >> /Contents ${contentObjNums[p]} 0 R >>`);
+  }
+  const xrefStart=offset, totalObjs=objCount;
+  let xref = `xref\n0 ${totalObjs+1}\n0000000000 65535 f \n`;
+  for (let i=1;i<=totalObjs;i++) xref += String(offsets[i]).padStart(10,'0')+' 00000 n \n';
+  push(xref);
+  push(`trailer\n<< /Size ${totalObjs+1} /Root ${CATALOG} 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
+
+  const full = chunks.join('');
+  const bytes = new Uint8Array(full.length);
+  for (let i=0;i<full.length;i++) bytes[i] = full.charCodeAt(i) & 0xFF;
+  return bytes;
+}
+
+function sanitizeFilename(s) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,'_').toLowerCase().replace(/^_+|_+$/g,'');
+}
+function downloadBlob(blob,name) {
+  const u=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=u; a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(u),2000);
+}
+function nombreDniLinea() {
+  const n = (APP_CONFIG.nombre||'').trim(), d = (APP_CONFIG.dni||'').trim(), o = (APP_CONFIG.otroDoc||'').trim();
+  const ids = [d, o].filter(Boolean).join(' · ');
+  if (n && ids) return `${n} (${ids})`;
+  return n || ids || '';
+}
+function textoTrabajador() {
+  const linea = nombreDniLinea();
+  return linea ? `Trabajador: ${linea}` : '';
+}
+function construirPdfBlob() {
+  const rowsForPdf = lastReportRows.map(r=>({fecha:r.fechaFmt, dia:r.dia, tramos:r.tramos, horas:r.horas}));
+  const bytes = buildInformePdf(lastReportTitle, lastReportSubtitle, rowsForPdf, lastReportTotals);
+  return new Blob([bytes], {type:'application/pdf'});
+}
+function construirExcelBlob() {
+  const bytes = generarExcelBytes();
+  return new Blob([bytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+function descargarInformePDF() {
+  if (!lastReportRows) return;
+  downloadBlob(construirPdfBlob(), `informe_horas_${sanitizeFilename(lastReportSubtitle)}.pdf`);
+}
+function descargarInformeExcel() {
+  if (!lastReportRows) return;
+  downloadBlob(construirExcelBlob(), `informe_horas_${sanitizeFilename(lastReportSubtitle)}.xlsx`);
+}
+// Frase inicial obligatoria en todos los correos (con o sin adjunto), con los datos
+// del trabajador que haya configurados.
+function construirSaludoInforme() {
+  const nombre = (APP_CONFIG.nombre||'').trim();
+  const dni = (APP_CONFIG.dni||'').trim();
+  const otroDoc = (APP_CONFIG.otroDoc||'').trim();
+  let frase = `Remito las horas trabajadas en el periodo ${lastReportPeriodo}`;
+  if (nombre) frase += ` de ${nombre}`;
+  const docPartes = [];
+  if (dni) docPartes.push(`con DNI ${dni}`);
+  if (otroDoc) docPartes.push(`con ${otroDoc}`);
+  if (docPartes.length) frase += ' ' + docPartes.join(' y ');
+  return frase + '.';
+}
+// Tabla en texto plano con columnas alineadas, con el mismo contenido que el informe
+// mostrado en la aplicación (y el mismo que en el PDF/Excel).
+// Tabla en texto plano con tabuladores y barras "|" como separadores de columna (no se
+// pueden usar colores reales: ningún cliente de correo interpreta color en un cuerpo
+// "mailto" en texto plano, así que se usa un símbolo para destacar la fila de total).
+function construirTablaTextoInforme() {
+  const dosTramos = lastReportRows.some(r => r.tramos.length > 1);
+  const headers = dosTramos
+    ? ['Día','Fecha','Entrada 1','Salida 1','Entrada 2','Salida 2','Horas']
+    : ['Día','Fecha','Entrada','Salida','Horas'];
+  const filas = lastReportRows.map(r => {
+    const t1=r.tramos[0], t2=r.tramos[1];
+    const base = [r.dia, r.fechaFmt, t1.entrada, t1.salida];
+    if (dosTramos) base.push(t2?t2.entrada:'-', t2?t2.salida:'-');
+    base.push(r.horas.toFixed(2)+' h');
+    return base;
+  });
+  const totalRow = headers.map(()=>'');
+  totalRow[0]='★ TOTAL'; totalRow[1]=lastReportTotals.dias+' días'; totalRow[totalRow.length-1]=lastReportTotals.horas.toFixed(2)+' h';
+
+  const todas = [headers, ...filas, totalRow];
+  const anchos = headers.map((_,i)=> Math.max(...todas.map(f=>String(f[i]||'').length)));
+  const formatearFila = (f) => '|\t' + f.map((v,i)=>String(v||'').padEnd(anchos[i])).join('\t|\t') + '\t|';
+  const separador = '+' + anchos.map(a=>'-'.repeat(a+2)).join('+') + '+';
+
+  let texto = separador + '\n' + formatearFila(headers) + '\n' + separador + '\n';
+  filas.forEach(f => texto += formatearFila(f) + '\n');
+  texto += separador + '\n' + formatearFila(totalRow) + '\n' + separador;
+  return texto;
+}
+function buildSummaryText() {
+  let t = construirSaludoInforme() + '\n\n';
+  t += `${lastReportTitle}\n${lastReportSubtitle}\n\n`;
+  t += construirTablaTextoInforme();
+  return t;
+}
+// Si no se puede adjuntar automáticamente (mailto no lo permite por seguridad del
+// navegador), los archivos ya se han descargado antes de llegar aquí (ver
+// enviarInformePorEmail), así que solo queda avisar de que están listos para adjuntar.
+function fallbackMailto(summary, nombresArchivos) {
+  const subject=encodeURIComponent(lastReportTitle+' — '+lastReportSubtitle);
+  let nota = '';
+  if (nombresArchivos && nombresArchivos.length) {
+    nota = `\n\n(Se ha descargado ${nombresArchivos.join(' y ')} a tu carpeta de Descargas — los enlaces "mailto" no permiten adjuntar archivos automáticamente por seguridad del navegador. Adjúntalo aquí antes de enviar el correo.)`;
+  }
+  const body=encodeURIComponent(summary+nota);
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
+}
+// formato: 'ninguno' | 'pdf' | 'excel' | 'ambos'
+function enviarInformePorEmail(formato) {
+  if (!lastReportRows) return;
+  const summary = buildSummaryText();
+
+  if (formato === 'ninguno') {
+    // Correo de solo texto: mismo saludo y misma tabla que el informe, sin ningún archivo.
+    fallbackMailto(summary, []);
+    return;
+  }
+
+  const archivos = [];
+  if (formato === 'pdf' || formato === 'ambos') {
+    archivos.push({ blob: construirPdfBlob(), filename: `informe_horas_${sanitizeFilename(lastReportSubtitle)}.pdf` });
+  }
+  if (formato === 'excel' || formato === 'ambos') {
+    archivos.push({ blob: construirExcelBlob(), filename: `informe_horas_${sanitizeFilename(lastReportSubtitle)}.xlsx` });
+  }
+  if (!archivos.length) return;
+
+  // Se descargan primero, de verdad (a disco), antes de intentar compartirlos: algunos
+  // navegadores/dispositivos fallan al compartir un Blob que no se ha materializado antes,
+  // y el destinatario recibe un adjunto de 0 bytes. Así siempre queda una copia real lista.
+  archivos.forEach(a => downloadBlob(a.blob, a.filename));
+
+  try {
+    const files = archivos.map(a => new File([a.blob], a.filename, { type:a.blob.type, lastModified: Date.now() }));
+    if (navigator.canShare && navigator.canShare({files})) {
+      navigator.share({title:lastReportTitle, text:summary, files})
+        .catch(err=>{ if (err && err.name!=='AbortError') fallbackMailto(summary, archivos.map(a=>a.filename)); });
+      return;
+    }
+  } catch(err) { /* cae al fallback */ }
+  fallbackMailto(summary, archivos.map(a=>a.filename));
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// PANEL "GESTIÓN DE HORAS" — jornada / predeterminado / datos del trabajador
+// ═══════════════════════════════════════════════════════════════════════
+function populateConfigPanel() {
+  // Datos del trabajador
+  document.getElementById('cfgNombre').value = APP_CONFIG.nombre || '';
+  document.getElementById('cfgDni').value = APP_CONFIG.dni || '';
+  document.getElementById('cfgOtroDoc').value = APP_CONFIG.otroDoc || '';
+  actualizarFeedbackDni();
+
+  document.getElementById('cfgTipoJornada').value = APP_CONFIG.tipoJornada || 'continua';
+  document.getElementById('cfgPrecision').value = APP_CONFIG.precisionMinutos || 30;
+
+  // Selects de jornada: siempre las 24 h completas, en la precisión seleccionada
+  const jornadaOpts = jornadaOptionsCompletas(precisionSeleccionada());
+  fillTimeSelect('cfgJornadaInicio', jornadaOpts, APP_CONFIG.jornadaInicio);
+  fillTimeSelect('cfgJornadaFin', jornadaOpts, APP_CONFIG.jornadaFin);
+  fillTimeSelect('cfgJornadaInicio2', jornadaOpts, APP_CONFIG.jornadaInicio2);
+  fillTimeSelect('cfgJornadaFin2', jornadaOpts, APP_CONFIG.jornadaFin2);
+
+  // Selects de predeterminado: acotados a la jornada actualmente configurada de cada tramo
+  refrescarSelectsPredeterminado(1);
+  refrescarSelectsPredeterminado(2);
+  onTipoJornadaChange();
+}
+
+// Precisión horaria seleccionada AHORA MISMO en el formulario (aunque no se haya guardado
+// todavía), para previsualizar en vivo los selects del propio panel de configuración.
+function precisionSeleccionada() {
+  const el = document.getElementById('cfgPrecision');
+  return el ? (parseInt(el.value,10) || 30) : (APP_CONFIG.precisionMinutos || 30);
+}
+// Al cambiar la precisión, se regeneran todos los selects de horas del panel (jornadas de
+// ambos tramos y sus predeterminados) conservando, en la medida de lo posible, el valor
+// más cercano ya elegido.
+function onPrecisionChange() {
+  const jornadaOpts = jornadaOptionsCompletas(precisionSeleccionada());
+  ['cfgJornadaInicio','cfgJornadaFin','cfgJornadaInicio2','cfgJornadaFin2'].forEach(id=>{
+    fillTimeSelect(id, jornadaOpts, document.getElementById(id).value);
+  });
+  refrescarSelectsPredeterminado(1);
+  refrescarSelectsPredeterminado(2);
+}
+document.getElementById('cfgPrecision').addEventListener('change', onPrecisionChange);
+
+function onTipoJornadaChange() {
+  const partida = document.getElementById('cfgTipoJornada').value === 'partida';
+  document.getElementById('bloqueTramo2').style.display = partida ? 'block' : 'none';
+  document.getElementById('labelJornada1').innerHTML = partida
+    ? '🕒 Tramo 1 — Intervalo de la jornada <span class="muted">(rango completo de 24 h)</span>'
+    : '🕒 Intervalo de la jornada <span class="muted">(rango completo de 24 h; delimita las opciones del intervalo predeterminado)</span>';
+  document.getElementById('labelPredeterminado1').innerHTML = partida
+    ? '⭐ Tramo 1 — Intervalo predeterminado <span class="muted">(no puede solaparse con el predeterminado del tramo 2)</span>'
+    : '⭐ Intervalo predeterminado <span class="muted">(valores que se preseleccionan al marcar un día; acotado por la jornada)</span>';
+}
+document.getElementById('cfgTipoJornada').addEventListener('change', onTipoJornadaChange);
+
+// tramo: 1 o 2 — acota los selects "predeterminado" de ese tramo a su propia jornada,
+// usando la precisión horaria seleccionada en vivo en el formulario.
+function refrescarSelectsPredeterminado(tramo) {
+  const sufijo = tramo === 2 ? '2' : '';
+  const inicio = document.getElementById('cfgJornadaInicio'+sufijo).value;
+  const fin = document.getElementById('cfgJornadaFin'+sufijo).value;
+  const opts = opcionesDentroDeJornada(inicio, fin, precisionSeleccionada());
+  const defEntradaId = 'cfgDefEntrada'+sufijo, defSalidaId = 'cfgDefSalida'+sufijo;
+  let defEntradaActual = document.getElementById(defEntradaId).value || APP_CONFIG['defEntrada'+sufijo];
+  let defSalidaActual = document.getElementById(defSalidaId).value || APP_CONFIG['defSalida'+sufijo];
+  if (!opts.includes(defEntradaActual)) defEntradaActual = opts[0];
+  if (!opts.includes(defSalidaActual)) defSalidaActual = opts[opts.length-1];
+  fillTimeSelect(defEntradaId, opts, defEntradaActual);
+  fillTimeSelect(defSalidaId, opts, defSalidaActual);
+}
+document.getElementById('cfgJornadaInicio').addEventListener('change', ()=>refrescarSelectsPredeterminado(1));
+document.getElementById('cfgJornadaFin').addEventListener('change', ()=>refrescarSelectsPredeterminado(1));
+document.getElementById('cfgJornadaInicio2').addEventListener('change', ()=>refrescarSelectsPredeterminado(2));
+document.getElementById('cfgJornadaFin2').addEventListener('change', ()=>refrescarSelectsPredeterminado(2));
+
+function actualizarFeedbackDni() {
+  const r = validarDniNie(document.getElementById('cfgDni').value);
+  const el = document.getElementById('cfgDniFeedback');
+  el.textContent = r.msg;
+  el.style.color = r.valid===false ? 'var(--err)' : r.valid===true ? 'var(--ok)' : 'var(--muted)';
+}
+document.getElementById('cfgDni').addEventListener('input', actualizarFeedbackDni);
+
+function guardarConfiguracion() {
+  const nombre = document.getElementById('cfgNombre').value.trim();
+  const dni = document.getElementById('cfgDni').value.trim().toUpperCase();
+  const otroDoc = document.getElementById('cfgOtroDoc').value.trim();
+  const dniCheck = validarDniNie(dni);
+  if (dniCheck.valid === false) { alert('El DNI/NIE no es válido: '+dniCheck.msg.replace('✕ ','')); return; }
+
+  const tipoJornada = document.getElementById('cfgTipoJornada').value;
+  const partida = tipoJornada === 'partida';
+
+  const jornadaInicio = document.getElementById('cfgJornadaInicio').value;
+  const jornadaFin = document.getElementById('cfgJornadaFin').value;
+  const defEntrada = document.getElementById('cfgDefEntrada').value;
+  const defSalida = document.getElementById('cfgDefSalida').value;
+  let jornadaInicio2 = APP_CONFIG.jornadaInicio2, jornadaFin2 = APP_CONFIG.jornadaFin2;
+  let defEntrada2 = APP_CONFIG.defEntrada2, defSalida2 = APP_CONFIG.defSalida2;
+  if (partida) {
+    jornadaInicio2 = document.getElementById('cfgJornadaInicio2').value;
+    jornadaFin2 = document.getElementById('cfgJornadaFin2').value;
+    defEntrada2 = document.getElementById('cfgDefEntrada2').value;
+    defSalida2 = document.getElementById('cfgDefSalida2').value;
+  }
+  const valores = partida
+    ? [jornadaInicio,jornadaFin,defEntrada,defSalida,jornadaInicio2,jornadaFin2,defEntrada2,defSalida2]
+    : [jornadaInicio,jornadaFin,defEntrada,defSalida];
+  if (valores.some(v => !v || Number.isNaN(timeToMinutes(v)))) {
+    alert('Alguno de los horarios no tiene un valor válido. Vuelve a seleccionarlo y guarda de nuevo.'); return;
+  }
+
+  if (timeToMinutes(jornadaFin) <= timeToMinutes(jornadaInicio)) {
+    alert('Tramo 1: la hora de fin de la jornada debe ser posterior a la de inicio.'); return;
+  }
+  if (timeToMinutes(defSalida) <= timeToMinutes(defEntrada)) {
+    alert('Tramo 1: la hora de salida predeterminada debe ser posterior a la de entrada.'); return;
+  }
+
+  if (partida) {
+    if (timeToMinutes(jornadaFin2) <= timeToMinutes(jornadaInicio2)) {
+      alert('Tramo 2: la hora de fin de la jornada debe ser posterior a la de inicio.'); return;
+    }
+    if (timeToMinutes(defSalida2) <= timeToMinutes(defEntrada2)) {
+      alert('Tramo 2: la hora de salida predeterminada debe ser posterior a la de entrada.'); return;
+    }
+    // Solo los intervalos PREDETERMINADOS no pueden solaparse entre tramos (las jornadas sí pueden).
+    if (intervalosSolapan(defEntrada, defSalida, defEntrada2, defSalida2)) {
+      alert('Los intervalos predeterminados de los dos tramos no pueden solaparse. Ajusta las horas predeterminadas de cada tramo.');
+      return;
+    }
+  }
+
+  saveConfigData({ nombre, dni, otroDoc, tipoJornada, precisionMinutos:precisionSeleccionada(), jornadaInicio, jornadaFin, defEntrada, defSalida, jornadaInicio2, jornadaFin2, defEntrada2, defSalida2 });
+  document.getElementById('cfgStatus').textContent = '✓ Configuración guardada';
+  setTimeout(()=>{ document.getElementById('cfgStatus').textContent=''; }, 3000);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// APARIENCIA (automático / claro / oscuro)
+// ═══════════════════════════════════════════════════════════════════════
+const TEMA_KEY = 'tema_app';
+function temaGuardado() { try { return localStorage.getItem(TEMA_KEY) || 'auto'; } catch(e) { return 'auto'; } }
+function aplicarTema() {
+  const pref = temaGuardado();
+  const oscuro = pref === 'oscuro' || (pref === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.setAttribute('data-theme', oscuro ? 'dark' : 'light');
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', oscuro ? '#17395c' : '#1a4a7a');
+}
+function onTemaChange() {
+  try { localStorage.setItem(TEMA_KEY, document.getElementById('cfgTema').value); } catch(e) {}
+  aplicarTema();
+}
+if (window.matchMedia) {
+  const mq = matchMedia('(prefers-color-scheme: dark)');
+  const f = () => { if (temaGuardado() === 'auto') aplicarTema(); };
+  if (mq.addEventListener) mq.addEventListener('change', f); else if (mq.addListener) mq.addListener(f);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// COPIA DE SEGURIDAD (exportar / importar) y almacenamiento persistente
+// Los datos viven en el almacenamiento del navegador: se pierden si se borran los datos de la
+// app, se desinstala o se cambia de móvil. La copia es un archivo que se puede guardar en
+// Drive, enviarse por correo, etc.
+// ═══════════════════════════════════════════════════════════════════════
+const LAST_BACKUP_KEY = 'ultima_copia_app';
+const RE_CLAVE_DATOS = /^(festivos_laboral_|horas_trabajadas_)\d{4}$/;
+function claveEsDeLaApp(k) { return k === CONFIG_KEY || RE_CLAVE_DATOS.test(k); }
+function construirCopia() {
+  const datos = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!claveEsDeLaApp(k)) continue;
+    try { datos[k] = JSON.parse(localStorage.getItem(k)); } catch(e) {}
+  }
+  return { app:'gestion-horarios-trabajo', version:2, exportado:new Date().toISOString(), datos };
+}
+function contarDiasConHoras(datos) {
+  let n = 0;
+  for (const k of Object.keys(datos)) if (k.startsWith('horas_trabajadas_') && datos[k] && typeof datos[k] === 'object') n += Object.keys(datos[k]).length;
+  return n;
+}
+function hayDatosRegistrados() { return contarDiasConHoras(construirCopia().datos) > 0; }
+function registrarCopiaHecha() {
+  try { localStorage.setItem(LAST_BACKUP_KEY, String(Date.now())); } catch(e) {}
+  mostrarEstadoCopia();
+}
+// Compartir (hoja de Android: Drive, correo, WhatsApp...) y, si no es posible, descargar.
+// Chrome solo deja compartir ciertos tipos de archivo, por eso para compartir se usa .txt.
+async function exportarCopia(soloDescargar) {
+  const hoy = new Date().toISOString().slice(0,10);
+  const json = JSON.stringify(construirCopia(), null, 1);
+  if (!soloDescargar) {
+    try {
+      const file = new File([json], `copia_horarios_${hoy}.txt`, { type:'text/plain' });
+      if (navigator.canShare && navigator.canShare({ files:[file] })) {
+        await navigator.share({ files:[file], title:'Copia de seguridad — Gestión de Horarios de Trabajo' });
+        registrarCopiaHecha();
+        return;
+      }
+    } catch(err) { if (err && err.name === 'AbortError') return; }
+  }
+  downloadBlob(new Blob([json], { type:'application/json' }), `copia_horarios_${hoy}.json`);
+  registrarCopiaHecha();
+}
+function importarCopiaArchivo(file) {
+  if (!file) return;
+  const r = new FileReader();
+  r.onerror = () => alert('No se pudo leer el archivo.');
+  r.onload = () => {
+    let obj;
+    try { obj = JSON.parse(r.result); } catch(e) { alert('El archivo no es una copia de seguridad válida.'); return; }
+    if (!obj || obj.app !== 'gestion-horarios-trabajo' || !obj.datos || typeof obj.datos !== 'object') {
+      alert('El archivo no es una copia de seguridad de esta aplicación.'); return;
+    }
+    const entradas = Object.entries(obj.datos).filter(([k,v]) => claveEsDeLaApp(k) && v && typeof v === 'object' && !Array.isArray(v));
+    if (!entradas.length) { alert('La copia no contiene datos que importar.'); return; }
+    const datos = Object.fromEntries(entradas);
+    const nDias = contarDiasConHoras(datos);
+    const anios = entradas.filter(([k]) => k.startsWith('horas_trabajadas_')).map(([k]) => k.slice(-4)).sort();
+    const fecha = obj.exportado ? new Date(obj.exportado).toLocaleDateString('es-ES') : 'fecha desconocida';
+    const msg = `Copia del ${fecha}: ${nDias} días con horas` + (anios.length ? ` (años ${anios.join(', ')})` : '') +
+      (datos[CONFIG_KEY] ? ' y la configuración' : '') +
+      `.\n\nSe SUSTITUIRÁN los datos actuales de esos años${datos[CONFIG_KEY] ? ' y la configuración' : ''}. ¿Continuar?`;
+    if (!confirm(msg)) return;
+    for (const [k,v] of entradas) {
+      if (k === CONFIG_KEY) {
+        const limpia = {};
+        for (const c of Object.keys(CONFIG_DEFAULTS)) if (v[c] !== undefined) limpia[c] = v[c];
+        localStorage.setItem(k, JSON.stringify(limpia));
+      } else localStorage.setItem(k, JSON.stringify(v));
+    }
+    APP_CONFIG = loadConfig();
+    populateConfigPanel();
+    renderCalendar();
+    document.getElementById('statusBar').textContent = `✓ Copia importada: ${nDias} días con horas.`;
+    mostrarEstadoCopia();
+  };
+  r.readAsText(file);
+}
+function mostrarEstadoCopia() {
+  const el = document.getElementById('copiaEstado');
+  if (!el) return;
+  let ts = 0;
+  try { ts = parseInt(localStorage.getItem(LAST_BACKUP_KEY) || '0', 10) || 0; } catch(e) {}
+  if (!ts) {
+    el.textContent = hayDatosRegistrados() ? '⚠ Todavía no has hecho ninguna copia de seguridad.' : 'Sin copias todavía.';
+    el.style.color = hayDatosRegistrados() ? 'var(--err)' : 'var(--muted)';
+    return;
+  }
+  const dias = Math.floor((Date.now() - ts) / 86400000);
+  el.textContent = `Última copia: ${new Date(ts).toLocaleDateString('es-ES')}` + (dias > 30 ? ` (hace ${dias} días — conviene hacer otra)` : '');
+  el.style.color = dias > 30 ? 'var(--err)' : 'var(--ok)';
+}
+async function comprobarAlmacenamientoPersistente() {
+  const el = document.getElementById('persistEstado');
+  try {
+    if (!navigator.storage || !navigator.storage.persist) { if (el) el.textContent = ''; return; }
+    let p = await navigator.storage.persisted();
+    if (!p) p = await navigator.storage.persist();
+    if (el) el.textContent = p ? '🛡 Almacenamiento protegido: Android no borrará los datos por falta de espacio.'
+                              : 'El navegador puede borrar los datos si falta espacio; por eso conviene hacer copias.';
+  } catch(e) { if (el) el.textContent = ''; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// BLOQUEO CON PIN (y huella/biometría opcional)
+// Es un bloqueo de pantalla de la propia app: protege frente a quien coja el móvil
+// desbloqueado, pero los datos no se cifran en el almacenamiento.
+// ═══════════════════════════════════════════════════════════════════════
+const LOCK_KEY = 'bloqueo_app';
+const LOCK_ITER = 100000;
+const LOCK_SEGUNDOS_FONDO = 60; // se vuelve a pedir el PIN si la app estuvo más de 1 min en segundo plano
+function leerBloqueo() {
+  try { const r = localStorage.getItem(LOCK_KEY); const o = r ? JSON.parse(r) : null; return (o && o.hash) ? o : null; }
+  catch(e) { return null; }
+}
+function guardarBloqueo(o) { if (o) localStorage.setItem(LOCK_KEY, JSON.stringify(o)); else localStorage.removeItem(LOCK_KEY); }
+function b64(buf) { let s = ''; new Uint8Array(buf).forEach(b => s += String.fromCharCode(b)); return btoa(s); }
+function unb64(s) { const bin = atob(s); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a; }
+async function hashPin(pin, saltB64, iter) {
+  if (window.crypto && crypto.subtle) {
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveBits']);
+    const bits = await crypto.subtle.deriveBits({ name:'PBKDF2', salt:unb64(saltB64), iterations:iter, hash:'SHA-256' }, key, 256);
+    return b64(bits);
+  }
+  // Sin contexto seguro (p. ej. abierto como archivo local) no existe crypto.subtle: hash simple.
+  let h = 2166136261; const s = saltB64 + pin;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return 'f' + (h >>> 0).toString(16);
+}
+async function verificarPin(pin) {
+  const bl = leerBloqueo(); if (!bl) return true;
+  return (await hashPin(pin, bl.salt, bl.iter)) === bl.hash;
+}
+
+let _accionPendiente = null, _fallosPin = 0, _bloqueadoHasta = 0, _ocultoDesde = 0;
+function bloquearApp() {
+  const bl = leerBloqueo(); if (!bl) return;
+  closeModalHoras(); closeModal();
+  if (modoSeleccion) toggleSeleccion(false);
+  document.documentElement.classList.add('locked');
+  const inp = document.getElementById('lockPin'); inp.value = '';
+  document.getElementById('lockMsg').textContent = '';
+  document.getElementById('lockBioBtn').style.display = bl.bio ? 'block' : 'none';
+  setTimeout(() => { try { inp.focus(); } catch(e) {} }, 80);
+  if (bl.bio) intentarBiometria(true);
+}
+function desbloquearApp() {
+  document.documentElement.classList.remove('locked');
+  _fallosPin = 0;
+  const a = _accionPendiente; _accionPendiente = null;
+  if (a) procesarAccion(a);
+}
+async function intentarDesbloqueo() {
+  const msg = document.getElementById('lockMsg');
+  const ahora = Date.now();
+  if (ahora < _bloqueadoHasta) { msg.textContent = `Espera ${Math.ceil((_bloqueadoHasta-ahora)/1000)} s antes de reintentar.`; return; }
+  const pin = document.getElementById('lockPin').value;
+  if (await verificarPin(pin)) { document.getElementById('lockPin').value = ''; desbloquearApp(); return; }
+  _fallosPin++;
+  document.getElementById('lockPin').value = '';
+  if (_fallosPin >= 5) { _bloqueadoHasta = Date.now() + 30000; _fallosPin = 0; msg.textContent = 'Demasiados intentos. Espera 30 segundos.'; }
+  else msg.textContent = 'PIN incorrecto.';
+}
+document.getElementById('lockBtn').addEventListener('click', intentarDesbloqueo);
+document.getElementById('lockPin').addEventListener('keydown', e => { if (e.key === 'Enter') intentarDesbloqueo(); });
+document.getElementById('lockBioBtn').addEventListener('click', () => intentarBiometria(false));
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { _ocultoDesde = Date.now(); return; }
+  if (leerBloqueo() && _ocultoDesde && Date.now() - _ocultoDesde > LOCK_SEGUNDOS_FONDO * 1000) bloquearApp();
+  _ocultoDesde = 0;
+});
+
+// Biometría del dispositivo mediante WebAuthn (solo como "llave" local de desbloqueo).
+async function biometriaDisponible() {
+  try {
+    return !!(window.PublicKeyCredential && navigator.credentials && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable
+      && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());
+  } catch(e) { return false; }
+}
+async function registrarBiometria() {
+  const cred = await navigator.credentials.create({ publicKey:{
+    challenge: crypto.getRandomValues(new Uint8Array(32)),
+    rp: { name:'Gestión de Horarios de Trabajo' },
+    user: { id: crypto.getRandomValues(new Uint8Array(16)), name:'usuario', displayName:'Usuario' },
+    pubKeyCredParams: [{ type:'public-key', alg:-7 }, { type:'public-key', alg:-257 }],
+    authenticatorSelection: { authenticatorAttachment:'platform', userVerification:'required', residentKey:'discouraged' },
+    timeout: 60000, attestation: 'none',
+  }});
+  return b64(cred.rawId);
+}
+async function intentarBiometria(silencioso) {
+  const bl = leerBloqueo(); if (!bl || !bl.bio) return;
+  try {
+    await navigator.credentials.get({ publicKey:{
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials: [{ type:'public-key', id: unb64(bl.bio), transports:['internal'] }],
+      userVerification: 'required', timeout: 60000,
+    }});
+    desbloquearApp();
+  } catch(e) {
+    if (!silencioso) document.getElementById('lockMsg').textContent = 'No se pudo verificar la huella. Usa el PIN.';
+  }
+}
+
+// ── Panel de configuración del bloqueo ──
+let _modoFormPin = null; // 'activar' | 'cambiar' | 'desactivar'
+function refrescarUiBloqueo() {
+  const bl = leerBloqueo();
+  document.getElementById('bloqueoEstado').textContent = bl ? '🔒 Bloqueo activado' + (bl.bio ? ' (PIN + huella)' : ' (PIN)') : '🔓 Bloqueo desactivado';
+  document.getElementById('btnPinActivar').style.display = bl ? 'none' : 'inline-block';
+  document.getElementById('btnPinCambiar').style.display = bl ? 'inline-block' : 'none';
+  document.getElementById('btnPinQuitar').style.display = bl ? 'inline-block' : 'none';
+  const bioRow = document.getElementById('bioRow');
+  bioRow.style.display = 'none';
+  if (bl) biometriaDisponible().then(ok => {
+    bioRow.style.display = ok ? 'flex' : 'none';
+    document.getElementById('chkBio').checked = !!(leerBloqueo() && leerBloqueo().bio);
+  });
+}
+function mostrarFormPin(modo) {
+  _modoFormPin = modo;
+  const f = document.getElementById('formPin');
+  f.style.display = 'flex';
+  document.getElementById('pinActual').style.display = modo === 'activar' ? 'none' : 'inline-block';
+  document.getElementById('pinNuevo').style.display = modo === 'desactivar' ? 'none' : 'inline-block';
+  document.getElementById('pinNuevo2').style.display = modo === 'desactivar' ? 'none' : 'inline-block';
+  ['pinActual','pinNuevo','pinNuevo2'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('pinMsg').textContent = '';
+  document.getElementById('pinGuardar').textContent = modo === 'activar' ? 'Activar bloqueo' : modo === 'cambiar' ? 'Cambiar PIN' : 'Desactivar bloqueo';
+  document.getElementById(modo === 'activar' ? 'pinNuevo' : 'pinActual').focus();
+}
+function ocultarFormPin() { document.getElementById('formPin').style.display = 'none'; _modoFormPin = null; }
+async function confirmarFormPin() {
+  const msg = document.getElementById('pinMsg');
+  const err = t => { msg.textContent = t; msg.style.color = 'var(--err)'; };
+  const modo = _modoFormPin;
+  if (modo !== 'activar') {
+    if (!(await verificarPin(document.getElementById('pinActual').value))) { err('El PIN actual no es correcto.'); return; }
+  }
+  if (modo === 'desactivar') {
+    guardarBloqueo(null); ocultarFormPin(); refrescarUiBloqueo(); return;
+  }
+  const p1 = document.getElementById('pinNuevo').value, p2 = document.getElementById('pinNuevo2').value;
+  if (!/^\d{4,6}$/.test(p1)) { err('El PIN debe tener entre 4 y 6 dígitos.'); return; }
+  if (p1 !== p2) { err('Los dos PIN no coinciden.'); return; }
+  const salt = b64(crypto.getRandomValues(new Uint8Array(16)));
+  const previo = leerBloqueo();
+  guardarBloqueo({ v:1, salt, iter:LOCK_ITER, hash: await hashPin(p1, salt, LOCK_ITER), bio: previo ? previo.bio || null : null });
+  ocultarFormPin(); refrescarUiBloqueo();
+  document.getElementById('bloqueoEstado').textContent += ' ✓ guardado';
+}
+async function onBioChange() {
+  const chk = document.getElementById('chkBio'), bl = leerBloqueo();
+  if (!bl) { chk.checked = false; return; }
+  if (chk.checked) {
+    try { bl.bio = await registrarBiometria(); guardarBloqueo(bl); }
+    catch(e) { chk.checked = false; alert('No se pudo activar la huella/biometría en este dispositivo.'); }
+  } else { bl.bio = null; guardarBloqueo(bl); }
+  refrescarUiBloqueo();
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ATAJOS DE LA PANTALLA DE INICIO (mantener pulsado el icono): ?accion=hoy | informe
+// ═══════════════════════════════════════════════════════════════════════
+function procesarAccion(a) {
+  if (a === 'hoy') {
+    setMode('horas'); irAHoy();
+    abrirModalHoras([hoyKey()]);
+  } else if (a === 'informe') {
+    const t = new Date();
+    document.getElementById('repTipo').value = 'mensual'; onRepTipoChange();
+    document.getElementById('repMes').value = t.getMonth();
+    const sel = document.getElementById('repAnioM');
+    if ([...sel.options].some(o => o.value === String(t.getFullYear()))) sel.value = t.getFullYear();
+    generarInforme();
+    document.getElementById('panelInforme').scrollIntoView({ block:'start' });
+  }
+}
+function leerAccionInicial() {
+  try {
+    const a = new URLSearchParams(location.search).get('accion');
+    if (a) history.replaceState(null, '', location.pathname);
+    return (a === 'hoy' || a === 'informe') ? a : null;
+  } catch(e) { return null; }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════════
+try {
+  const accionInicial = leerAccionInicial();
+  viewMode = cargarVista();
+  buildYearTabs();
+  renderCalendar();
+  populateReportSelectors();
+  onRepTipoChange();
+  populateConfigPanel();
+  setMode('horas');
+  document.getElementById('cfgTema').value = temaGuardado();
+  if (!APP_CONFIG.nombre) document.getElementById('configPanel').open = true; // primer uso: pedir los datos
+  mostrarEstadoCopia();
+  comprobarAlmacenamientoPersistente();
+  refrescarUiBloqueo();
+  if (leerBloqueo()) { _accionPendiente = accionInicial; bloquearApp(); }
+  else if (accionInicial) procesarAccion(accionInicial);
+} catch(e) {
+  console.error('Init error:', e);
+  document.getElementById('calendarGrid').innerHTML =
+    '<p style="color:red;padding:20px">Error al cargar el calendario: ' + e.message + '</p>';
+}
+
+// Registro del service worker (necesario para poder "Instalar app" en Android/Chrome).
+// Solo funciona servido por http(s), no abriendo el archivo directamente con file://.
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js').catch(err => console.warn('SW no registrado:', err));
+  });
+}
+</script>
+</body>
+</html>
